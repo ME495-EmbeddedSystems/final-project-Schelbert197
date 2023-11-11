@@ -56,8 +56,6 @@ class Picker(Node):
         self.y_init = self.get_parameter(
             'y_init').get_parameter_value().double_value
 
-        self.get_logger().info(f"x_init: {self.x_init}")
-
         self.robot_name = self.get_parameter(
             'robot_name').get_parameter_value().string_value
         self.group_name = self.get_parameter(
@@ -182,13 +180,11 @@ class Picker(Node):
         None
 
         """
-        self.get_logger().info(f"state: {self.state}")
         if self.state == State.LOAD_MOVES:
             self.load_moves()
             self.state = State.PLANNING
 
         elif self.state == State.PLANNING and len(self.queue) != 0:
-            self.get_logger().info(f"queue: {self.queue}")
             current_queue_item = self.queue[0]
             await self.path_planner.get_goal_joint_states(current_queue_item)
             await self.path_planner.plan_path()
@@ -206,7 +202,6 @@ class Picker(Node):
 
         elif self.state == State.EXECUTING:
             await self.path_planner.execute_path()
-            self.get_logger().info(f"here")
             self.state = State.WAITING
 
         elif len(self.queue) == 0:
