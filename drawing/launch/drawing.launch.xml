@@ -14,7 +14,7 @@
     </include>
   </group>
   
-  <node pkg="pickmeup" exec="picker" name="Picker">
+  <node pkg="drawing" exec="draw" name="Drawing">
     <param name="robot_name" value="panda"/>
     <param name="group_name" value="panda_manipulator"/>
     <param name="frame_id" value="panda_link0"/>

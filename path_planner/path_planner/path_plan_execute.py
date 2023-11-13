@@ -559,7 +559,7 @@ class Path_Plan_Execute():
         """
         print("entering close gripper function")
         goal_msg = Grasp.Goal()
-        goal_msg.width = 0.08
+        goal_msg.width = 0.005
         goal_msg.speed = 0.05
         # goal_msg.force = 20.0
         self.send_goal_future = (
@@ -567,23 +567,40 @@ class Path_Plan_Execute():
         )
         self.send_goal_future.add_done_callback(self.goal_response_callback)
 
-    def feedback_callback(self, feedback_msg):
+    def OpenGripper(self):
         """
-        Provide a future result message.
+        Create a gripper action call.
 
-        Provide a future result message on the feedback from the
-        execute_path() and plan_and_execute() functions.
+        Create the message type for the gripper action call and sends the
+        goal async.
 
         Args:
         ----
-        feedback_msg (result) : the response object from the async
-        execution call
+        None
 
         """
-        feedback = feedback_msg.feedback
-        self.node.get_logger().info(f"Received Feedback: {feedback}")
+        print("entering close gripper function")
+        goal_msg = Grasp.Goal()
+        goal_msg.width = 0.035
+        goal_msg.speed = 0.05
+        # goal_msg.force = 20.0
+        self.send_goal_future = (
+            self.node.gripper_grasping_client.send_goal_async(goal_msg)
+        )
+        self.send_goal_future.add_done_callback(self.goal_response_callback)
 
-    def goal_response_callback(self, future):
+    def MoveGripper(self, goal_msg):
+        # goal_msg = Grasp.Goal()
+        # goal_msg.width = 0.0
+        # goal_msg.speed = 0.05
+
+        self.send_goal_future = (
+            self.node.gripper_grasping_client.send_goal_async(goal_msg)
+        )
+        self.send_goal_future.add_done_callbak(
+            self.gripper_goal_response_callback)
+
+    def gripper_goal_response_callback(self, future):
         """
         Provide a response for the goal callback.
 
@@ -605,7 +622,7 @@ class Path_Plan_Execute():
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
 
-    def get_result_callback(self, future):
+    def get_gripper_result_callback(self, future):
         """
         Provide a future result.
 
@@ -617,9 +634,24 @@ class Path_Plan_Execute():
         result call
 
         """
-        result = future.result().result
-        self.node.get_logger().info('Result: {0}'.format(result.success))
-        self.grasp_action_result = result.success
+        self.gripper_result = future.result().result
+        self.gripper_status = future.result().status
+
+    def feedback_callback(self, feedback_msg):
+        """
+        Provide a future result message.
+
+        Provide a future result message on the feedback from the
+        execute_path() and plan_and_execute() functions.
+
+        Args:
+        ----
+        feedback_msg (result) : the response object from the async
+        execution call
+
+        """
+        feedback = feedback_msg.feedback
+        self.node.get_logger().info(f"Received Feedback: {feedback}")
 
     def add_box(self, box_id, frame_id, dimensions, pose):
         """

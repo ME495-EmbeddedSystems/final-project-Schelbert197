@@ -12,6 +12,8 @@ from rclpy.action import ActionClient
 from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from action_msgs.msg import GoalStatus
 
+from franka_msgs.action import Homing, Grasp
+
 import numpy as np
 
 
@@ -27,7 +29,7 @@ class State(Enum):
     WAITING = auto()
 
 
-class Picker(Node):
+class Drawing(Node):
     """
     Pick up trash with the Franka.
 
@@ -41,7 +43,7 @@ class Picker(Node):
     """
 
     def __init__(self):
-        super().__init__("Picker")
+        super().__init__("Drawing")
 
         # declare parameters
         self.declare_parameter('x_init', 0.5)
@@ -73,7 +75,7 @@ class Picker(Node):
 
         # create services
         self.pick_service = self.create_service(
-            Empty, 'pickup', self.pick_callback)
+            Empty, 'draw', self.pick_callback)
 
         self.add_box_srv = self.create_service(
             Box, "add_box", self.add_box_callback)
@@ -167,7 +169,7 @@ class Picker(Node):
 
     async def timer_callback(self):
         """
-        Timer loop for the picker node.
+        Timer loop for the drawing node.
 
         The timer loop functions as the main loop of the node, and
         also contains a state machine. If the gripper server is
@@ -186,19 +188,25 @@ class Picker(Node):
 
         elif self.state == State.PLANNING and len(self.queue) != 0:
             current_queue_item = self.queue[0]
-            await self.path_planner.get_goal_joint_states(current_queue_item)
-            await self.path_planner.plan_path()
+            if isinstance(current_queue_item, type(Grasp())) and self.path_planner.gripper_available:
+                self.path_planner.MoveGripper()
+            else:
+                await self.path_planner.get_goal_joint_states(current_queue_item)
+                await self.path_planner.plan_path()
 
             self.queue.pop(0)
             self.state = State.WAITING
 
         elif self.state == State.WAITING:
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
-                self.state = State.PLANNING
+                self.state = State.EXECUTING
                 self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
             elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
                 self.state = State.PLANNING
                 self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
+            elif self.path_planner.gripper_status == GoalStatus.STATUS_SUCCEEDED:
+                self.state = State.PLANNING
+                self.path_planner.gripper_status = GoalStatus.STATUS_UNKNOWN
 
         elif self.state == State.EXECUTING:
             await self.path_planner.execute_path()
@@ -211,9 +219,9 @@ class Picker(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    picker = Picker()
+    drawing = Drawing()
 
-    rclpy.spin(picker)
+    rclpy.spin(drawing)
 
 
 if __name__ == '__main__':

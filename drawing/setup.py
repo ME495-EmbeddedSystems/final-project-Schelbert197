@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'pickmeup'
+package_name = 'drawing'
 
 setup(
     name=package_name,
@@ -12,7 +12,7 @@ setup(
         ('share/' + package_name,
          [
              'package.xml',
-             'launch/pickup.launch.xml'
+             'launch/drawing.launch.xml'
          ]
          ),
     ],
@@ -26,7 +26,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "picker = pickmeup.picker:main",
+            "draw = drawing.draw:main",
         ],
     },
 )
