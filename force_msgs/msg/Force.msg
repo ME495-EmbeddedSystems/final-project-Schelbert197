@@ -1,1 +1,1 @@
-float64[] ee_force
+float64[6] ee_force

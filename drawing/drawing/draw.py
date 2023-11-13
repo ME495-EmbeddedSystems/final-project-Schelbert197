@@ -14,6 +14,8 @@ from action_msgs.msg import GoalStatus
 
 from franka_msgs.action import Homing, Grasp
 
+from force_msgs.msg import Force
+
 import numpy as np
 
 
@@ -64,6 +66,9 @@ class Drawing(Node):
             'group_name').get_parameter_value().string_value
         self.frame_id = self.get_parameter(
             'frame_id').get_parameter_value().string_value
+
+        # create subscribers
+        self.ee_force = self.create_subscription(Force, 'franka_ee_force')
 
         # Initialize variables
         self.joint_names = []

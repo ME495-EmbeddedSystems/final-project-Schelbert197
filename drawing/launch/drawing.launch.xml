@@ -12,6 +12,7 @@
     <include file="$(find-pkg-share franka_moveit_config)/launch/rviz.launch.py" >
       <arg name="robot_ip" value="panda0.robot"/>
     </include>
+    <node pkg="read_ee_force" exec="read_ee_force" name="read_ee_force"/>
   </group>
   
   <node pkg="drawing" exec="draw" name="Drawing">
