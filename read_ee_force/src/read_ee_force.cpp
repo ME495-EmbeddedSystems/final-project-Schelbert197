@@ -27,7 +27,7 @@ class MinimalPublisher : public rclcpp::Node
       auto publish_msg = [this]() -> void {
         franka::RobotState robot_state = robot_->readOnce();
 
-        std::array<double, 6> external_force_torque = robot_state.O_F_ext_hat_K;
+        std::array<double, 6> external_force_torque = robot_state.K_F_ext_hat_K;
 
         auto message = force_msgs::msg::Force();
         message.ee_force = external_force_torque;

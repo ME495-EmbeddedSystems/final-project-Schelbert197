@@ -68,7 +68,8 @@ class Drawing(Node):
             'frame_id').get_parameter_value().string_value
 
         # create subscribers
-        self.ee_force = self.create_subscription(Force, 'franka_ee_force')
+        self.ee_force_subscriber = self.create_subscription(
+            Force, 'franka_ee_force', self.ee_force_callback)
 
         # Initialize variables
         self.joint_names = []
@@ -93,6 +94,8 @@ class Drawing(Node):
 
         self.poses = []
         self.queue = []
+        # [fx, fy, fz, tx, ty, tz] alternatively [N, N, N, Nm, Nm, Nm]
+        self.ee_force = [0, 0, 0, 0, 0, 0]
 
         self.rng = np.random.default_rng()
 
@@ -101,6 +104,10 @@ class Drawing(Node):
         self.result = False
         # being used for looping through to Open/Close gripper
         self.counter = 0
+
+    def ee_force_callback(self, msg):
+        self.ee_force = msg.ee_force
+        self.get_logger().info(f"ee_force: {self.ee_force}")
 
     def pick_callback(self, request, response):
         """
