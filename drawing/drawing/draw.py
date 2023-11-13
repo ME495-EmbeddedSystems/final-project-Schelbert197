@@ -69,7 +69,7 @@ class Drawing(Node):
 
         # create subscribers
         self.ee_force_subscriber = self.create_subscription(
-            Force, 'franka_ee_force', self.ee_force_callback)
+            Force, 'franka_ee_force', self.ee_force_callback, 10)
 
         # Initialize variables
         self.joint_names = []
