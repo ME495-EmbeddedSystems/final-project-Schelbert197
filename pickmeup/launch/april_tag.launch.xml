@@ -1,0 +1,25 @@
+<launch>
+
+
+      <include file="$(find-pkg-share realsense2_camera)/launch/rs_launch.py" >
+        <arg name="depth_module.profile" value="1280x720x30" />
+      </include>
+
+
+    <node pkg="apriltag_ros" exec="apriltag_node" name="apriltag1">
+        <remap from="image_rect" to="camera/color/image_raw"/>
+        <remap from="camera_info" to="camera/color/camera_info"/>
+        
+       <param name="params-file" value="$(find-pkg-share pickmeup)/tags1.yaml"/>
+       
+
+    </node>
+    <!-- <node pkg="apriltag_ros" exec="apriltag_node" name="apriltag2">
+        <remap from="image_rect" to="camera/color/image_raw"/>
+        <remap from="camera_info" to="camera/color/camera_info"/>
+        
+       <param name="params-file" value="$(find-pkg-share pickmeup)/tags2.yaml"/>
+       
+
+    </node> -->
+  </launch>

@@ -12,7 +12,9 @@ setup(
         ('share/' + package_name,
          [
              'package.xml',
-             'launch/pickup.launch.xml'
+             'launch/pickup.launch.xml',
+             'launch/april_tag.launch.xml',
+             'config/tags1.yaml'
          ]
          ),
     ],
@@ -27,6 +29,7 @@ setup(
     entry_points={
         'console_scripts': [
             "picker = pickmeup.picker:main",
+            "tags = pickmeup.tags:Tags_entry",
         ],
     },
 )
