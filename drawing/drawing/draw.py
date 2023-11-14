@@ -4,6 +4,9 @@ from rclpy.node import Node
 from std_srvs.srv import Empty
 from geometry_msgs.msg import Point, Quaternion, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
+
+from character_interfaces.alphabet import alphabet
+
 from rclpy.callback_groups import ReentrantCallbackGroup
 from box_adder_interfaces.srv import Box
 from enum import Enum, auto
@@ -147,17 +150,24 @@ class Drawing(Node):
     def cancel_goal_callback(self):
         self.path_planner.cancel_execution()
 
-    def load_moves(self):
-        pose1 = Pose()
-        pose1.position = Point(x=self.x_init, y=self.y_init, z=0.05)
-        pose1.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+    def load_move(self, letter):
+        # pose1 = Pose()
+        # pose1.position = Point(x=self.x_init, y=self.y_init, z=0.05)
+        # pose1.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
-        pose2 = Pose()
-        pose2.position = Point(x=0.2, y=0.3, z=0.5)
-        pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+        # pose2 = Pose()
+        # pose2.position = Point(x=0.2, y=0.3, z=0.5)
+        # pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
-        self.queue.append(pose1)
-        self.queue.append(pose2)
+        # self.queue.append(pose1)
+        # self.queue.append(pose2)
+
+        for point in alphabet[letter]:
+            pose = Pose()
+            pose.position = Point(
+                x=self.x_init, y=self.y_init+point[0], z=0.4+point[1])
+            pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+            self.queue.append(pose)
 
     def pick_callback(self, request, response):
         """
@@ -200,16 +210,16 @@ class Drawing(Node):
             self.prev_ee_wrench = ee_wrench
 
         if self.state == State.LOAD_MOVES:
-            self.load_moves()
+            self.load_move('a')
             self.state = State.PLANNING
 
         elif self.state == State.PLANNING and len(self.queue) != 0:
             current_queue_item = self.queue[0]
-            if isinstance(current_queue_item, type(Grasp())) and self.path_planner.gripper_available:
-                self.path_planner.MoveGripper()
-            else:
-                await self.path_planner.get_goal_joint_states(current_queue_item)
-                await self.path_planner.plan_path()
+            # if isinstance(current_queue_item, type(Grasp())) and self.path_planner.gripper_available:
+            #     self.path_planner.MoveGripper()
+            # else:
+            await self.path_planner.get_goal_joint_states(current_queue_item)
+            await self.path_planner.plan_path()
 
             self.queue.pop(0)
             self.state = State.WAITING

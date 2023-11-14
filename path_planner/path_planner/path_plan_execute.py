@@ -101,6 +101,8 @@ class Path_Plan_Execute():
         self.executetrajectory_result = None
         self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
 
+        self.gripper_status = GoalStatus.STATUS_UNKNOWN
+
         self.goal_handle_status = None
         self.grasp_action_result = False
 
