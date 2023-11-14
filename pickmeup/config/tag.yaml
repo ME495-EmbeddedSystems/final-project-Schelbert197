@@ -1,0 +1,11 @@
+apriltag:                 # node name
+  ros__parameters:
+    image_transport: raw  # image format: "raw" or "compressed"
+    family: 36h11         # tag family name: 16h5, 25h9, 36h11
+    # size: 0.08           # default tag edge size in meter
+    profile: false        # print profiling information to stdout
+
+    tag:
+      ids:    [2,1]         # tag IDs for which to publish transform
+      frames: [frame2, frame1]   # frame names
+      sizes:  [0.08, 0.08]     # tag-specific edge size, overrides the default 'size'

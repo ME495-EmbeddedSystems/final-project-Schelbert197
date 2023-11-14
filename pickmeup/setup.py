@@ -14,7 +14,8 @@ setup(
              'package.xml',
              'launch/pickup.launch.xml',
              'launch/april_tag.launch.xml',
-             'config/tags1.yaml'
+             'config/tag.yaml',
+             'config/view_camera.rviz'
          ]
          ),
     ],
