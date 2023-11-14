@@ -14,9 +14,8 @@ from action_msgs.msg import GoalStatus
 
 from franka_msgs.action import Homing, Grasp
 
-from force_msgs.msg import Force
-
 import numpy as np
+np.set_printoptions(suppress=True)
 
 
 class State(Enum):
@@ -67,10 +66,6 @@ class Drawing(Node):
         self.frame_id = self.get_parameter(
             'frame_id').get_parameter_value().string_value
 
-        # create subscribers
-        self.ee_force_subscriber = self.create_subscription(
-            Force, 'franka_ee_force', self.ee_force_callback, 10)
-
         # Initialize variables
         self.joint_names = []
         self.joint_pos = []
@@ -86,6 +81,9 @@ class Drawing(Node):
         self.add_box_srv = self.create_service(
             Box, "add_box", self.add_box_callback)
 
+        self.cancel_goal = self.create_service(
+            Empty, 'cancel_goal', self.cancel_goal_callback)
+
         box_id = 'box'
         frame_id = 'panda_link0'
         dimensions = [3.0, 2.0, 3.0]  # size
@@ -95,7 +93,7 @@ class Drawing(Node):
         self.poses = []
         self.queue = []
         # [fx, fy, fz, tx, ty, tz] alternatively [N, N, N, Nm, Nm, Nm]
-        self.ee_force = [0, 0, 0, 0, 0, 0]
+        self.prev_ee_wrench = None
 
         self.rng = np.random.default_rng()
 
@@ -104,10 +102,6 @@ class Drawing(Node):
         self.result = False
         # being used for looping through to Open/Close gripper
         self.counter = 0
-
-    def ee_force_callback(self, msg):
-        self.ee_force = msg.ee_force
-        self.get_logger().info(f"ee_force: {self.ee_force}")
 
     def pick_callback(self, request, response):
         """
@@ -149,6 +143,9 @@ class Drawing(Node):
         # Add the box to the planning scene using the add_box method
         self.path_planner.add_box(box_id, frame_id, dimensions, pose)
         return response
+
+    def cancel_goal_callback(self):
+        self.path_planner.cancel_execution()
 
     def load_moves(self):
         pose1 = Pose()
@@ -194,6 +191,14 @@ class Drawing(Node):
         None
 
         """
+        # check whether or not the marker is running into the board, maybe
+        if self.path_planner.gripper_available:
+            ee_wrench = self.path_planner.calc_EE_force()
+            if np.abs(ee_wrench[5] - self.prev_ee_wrench[5]) > 15:
+                self.path_planner.cancel_execution()
+
+            self.prev_ee_wrench = ee_wrench
+
         if self.state == State.LOAD_MOVES:
             self.load_moves()
             self.state = State.PLANNING

@@ -36,6 +36,9 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 from franka_msgs.action import Homing, Grasp
 
+import modern_robotics as mr
+import numpy as np
+
 
 class Path_Plan_Execute():
     """Class defining brick state."""
@@ -60,10 +63,13 @@ class Path_Plan_Execute():
             JointState, '/joint_states', self.joint_states_callback, 10)
         self.current_joint_state = JointState()
 
+        # subscribe to the control_msgs topic
+        # self.control_msgs = self.create
+
         # TODO: populate joint names and positions from self.joint_states
 
-        self.node.movegroup_client = ActionClient(self.node, MoveGroup,
-                                                  'move_action')
+        self.movegroup_client = ActionClient(self.node, MoveGroup,
+                                             'move_action')
         self.client_cb_group = ReentrantCallbackGroup()
         self.node.executetrajectory_client = ActionClient(
             self.node, ExecuteTrajectory, 'execute_trajectory')
@@ -100,6 +106,25 @@ class Path_Plan_Execute():
 
         self.goal_joint_state = None
         self.planned_trajectory = None
+
+        self.L1 = 0.333
+        self.L2 = 0.3160
+        self.L3 = 0.3840
+        self.L4 = 0.088
+        self.L5 = 0.1070
+
+        self.mass_matrix = np.array([[0.502922, -0.00659085, 0.476807, -0.00202931, 0.0526733, -0.000254634, -0.00282315],
+                                     [-0.00659085, 0.476807, -0.00202931, 0.0526733, -
+                                         0.000254634, -0.00282315, -0.00659085],
+                                     [0.476807, -0.00202931, 0.0526733, -
+                                         0.000254634, -0.00282315, -0.00659085, 1.55193],
+                                     [-0.00202931, 0.0526733, -
+                                    0.000254634, -0.00282315, -0.00659085, 1.55193, -0.0227345],
+                                    [0.0526733, -0.000254634, -0.00282315, -
+                                        0.00659085, 1.55193, -0.0227345, -0.687864],
+                                    [-0.000254634, -0.00282315, -0.00659085,
+                                        1.55193, -0.0227345, -0.687864, -0.00779532],
+                                    [-0.00282315, -0.00659085, 1.55193, -0.0227345, -0.687864, -0.00779532, -0.0338294]])
 
         self.planning_scene_publisher = self.node.create_publisher(
             CollisionObject,
@@ -303,6 +328,21 @@ class Path_Plan_Execute():
         # # self.node.get_logger().info(
         # #     f"panda_joint9: {self.current_joint_state.position[8]}\n\n")
 
+    def calc_EE_force(self):
+        thetalist = np.asarray(self.current_joint_state.position[:7])
+        taulist = np.asarray(self.current_joint_state.effort[:7])
+        # self.node.get_logger().info(f"{self.current_joint_state.position}")
+        # self.node.get_logger().info(f"{thetalist}")
+
+        Slist = np.array([[0, 0, 0, 0, 0, 0, 0], [0, 1, 0, -1, 0, -1, 0], [1, 0, 1, 0, 1, 0, -1],
+                         [0, -self.L1, 0, self.L1+self.L2, 0, self.L1+self.L2+self.L3, 0], [0, 0, 0, 0, 0, 0, self.L4], [0, 0, 0, -self.L4, 0, 0, 0]])
+
+        Jb = mr.JacobianSpace(Slist, thetalist)
+
+        Ftip = np.linalg.pinv(Jb.T) @ taulist
+
+        return Ftip
+
     async def ik_callback(self, pose, joint_state):
         """
         Format the IK service message and send it.
@@ -387,68 +427,11 @@ class Path_Plan_Execute():
             # self.node.get_logger().info(
             #     f"movegroup_goal_msg: {movegroup_goal_msg}")
 
-            self.send_goal_future = self.node.movegroup_client.send_goal_async(
+            self.send_goal_future = self.movegroup_client.send_goal_async(
                 movegroup_goal_msg,
                 feedback_callback=self.feedback_callback)
             self.send_goal_future.add_done_callback(
                 self.movegroup_goal_response_callback)
-        else:
-            self.node.get_logger().error("Given pos is invalid")
-
-    async def execute_path(self):
-        """
-        Execute a previously planned path.
-
-        Execute a planned path by calling the execute_trajectory_client,
-        and sends a future object to indicate completion of the async call.
-
-        Args:
-        ----
-        request (int) : a dummy callback variable
-        response (int) : a dummy response variable
-
-        """
-        self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
-        self.executetrajectory_result = None
-
-        executetrajectory_goal_msg = ExecuteTrajectory.Goal()
-        executetrajectory_goal_msg.trajectory = self.planned_trajectory
-        self.send_goal_future = (
-            self.node.executetrajectory_client.send_goal_async(
-                executetrajectory_goal_msg,
-                feedback_callback=self.feedback_callback
-            )
-        )
-        self.send_goal_future.add_done_callback(
-            self.executetrajectory_goal_response_callback)
-
-    async def plan_and_execute_path(self):
-        """
-        Plan and execute a path to the goal.
-
-        Plan and execute a path to a goal position and orientation
-        asynchronously by calling the movegroup_client and seeking a response
-        to indicate completion.
-
-        Args:
-        ----
-        request (int) : a dummy callback variable
-        response (int) : a dummy response variable
-
-        """
-        self.update_current_jointstate()
-        self.set_planning_options()
-        await self.get_goal_joint_states()
-        if len(self.goal_joint_state.position) > 0:
-            self.set_goal_constraints()
-
-            self.movegroup_goal_msg.planning_options.plan_only = False
-            self.send_goal_future = self.node.movegroup_client.send_goal_async(
-                self.movegroup_goal_msg,
-                feedback_callback=self.feedback_callback)
-            self.send_goal_future.add_done_callback(
-                self.movegroup_goal_response_callback)
-
         else:
             self.node.get_logger().error("Given pos is invalid")
 
@@ -465,15 +448,15 @@ class Path_Plan_Execute():
         function
 
         """
-        goal_handle = future.result()
-        self.goal_handle_status = goal_handle.status
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        self.goal_handle_status = self.goal_handle.status
+        if not self.goal_handle.accepted:
             self.node.get_logger().info('Planning Goal Rejected :P')
             return
 
         self.node.get_logger().info('Planning Goal Accepted :)')
 
-        self.get_result_future = goal_handle.get_result_async()
+        self.get_result_future = self.goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_movegroup_result_callback)
 
@@ -503,6 +486,33 @@ class Path_Plan_Execute():
         # )
         self.node.get_logger().info("executetrajectory goal msg set!")
 
+    async def execute_path(self):
+        """
+        Execute a previously planned path.
+
+        Execute a planned path by calling the execute_trajectory_client,
+        and sends a future object to indicate completion of the async call.
+
+        Args:
+        ----
+        request (int) : a dummy callback variable
+        response (int) : a dummy response variable
+
+        """
+        self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
+        self.executetrajectory_result = None
+
+        executetrajectory_goal_msg = ExecuteTrajectory.Goal()
+        executetrajectory_goal_msg.trajectory = self.planned_trajectory
+        self.send_goal_future = (
+            self.node.executetrajectory_client.send_goal_async(
+                executetrajectory_goal_msg,
+                feedback_callback=self.feedback_callback
+            )
+        )
+        self.send_goal_future.add_done_callback(
+            self.executetrajectory_goal_response_callback)
+
     def executetrajectory_goal_response_callback(self, future):
         """
         Provide a future result.
@@ -515,14 +525,14 @@ class Path_Plan_Execute():
         execute_path function
 
         """
-        goal_handle = future.result()
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        if not self.goal_handle.accepted:
             self.node.get_logger().info('Execute Goal Rejected :P')
             return
 
         self.node.get_logger().info('Execute Goal Accepted :)')
 
-        self.get_result_future = goal_handle.get_result_async()
+        self.get_result_future = self.goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_executetrajectory_result_callback)
 
@@ -545,7 +555,63 @@ class Path_Plan_Execute():
         self.node.get_logger().info(
             f'Result Error Code: {self.executetrajectory_result.error_code}')
 
-    def CloseGripper(self):
+    async def plan_and_execute_path(self):
+        """
+        Plan and execute a path to the goal.
+
+        Plan and execute a path to a goal position and orientation
+        asynchronously by calling the movegroup_client and seeking a response
+        to indicate completion.
+
+        Args:
+        ----
+        request (int) : a dummy callback variable
+        response (int) : a dummy response variable
+
+        """
+        self.update_current_jointstate()
+        self.set_planning_options()
+        await self.get_goal_joint_states()
+        if len(self.goal_joint_state.position) > 0:
+            self.set_goal_constraints()
+
+            self.movegroup_goal_msg.planning_options.plan_only = False
+            self.send_goal_future = self.movegroup_client.send_goal_async(
+                self.movegroup_goal_msg,
+                feedback_callback=self.feedback_callback)
+            self.send_goal_future.add_done_callback(
+                self.movegroup_goal_response_callback)
+
+        else:
+            self.node.get_logger().error("Given pos is invalid")
+
+    async def cancel_execution(self):
+        self.cancel_execution_future = self.movegroup_client._cancel_goal_async(
+            self.goal_handle)
+        self.cancel_execution_future.add_done_callback(
+            self.cancel_execution_callback)
+
+    async def cancel_execution_callback(self, future):
+        self.cancel_goal_handle = future.result()
+        self.cancel_goal_handle_status = self.cancel_goal_handle.status
+        if not self.cancel_goal_handle.accepted:
+            self.node.get_logger().info('Cancel Goal Rejected :P')
+            return
+
+        self.get_result_future = self.cancel_goal_handle.get_result_async()
+        self.get_result_future.add_done_callback(
+            self.get_cancel_result_callback)
+
+    async def get_cancel_result_callback(self, future):
+        self.cancel_result = future.result().result
+        self.cancel_status = future.result().status
+
+        self.node.get_logger().info(
+            f"cancel_status: {self.cancel_status}")
+
+        self.node.get_logger().info("Current trajectory canceled")
+
+    async def CloseGripper(self):
         """
         Create a gripper action call.
 
@@ -567,7 +633,7 @@ class Path_Plan_Execute():
         )
         self.send_goal_future.add_done_callback(self.goal_response_callback)
 
-    def OpenGripper(self):
+    async def OpenGripper(self):
         """
         Create a gripper action call.
 
@@ -589,7 +655,7 @@ class Path_Plan_Execute():
         )
         self.send_goal_future.add_done_callback(self.goal_response_callback)
 
-    def MoveGripper(self, goal_msg):
+    async def MoveGripper(self, goal_msg):
         # goal_msg = Grasp.Goal()
         # goal_msg.width = 0.0
         # goal_msg.speed = 0.05
