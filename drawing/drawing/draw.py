@@ -13,7 +13,9 @@ from enum import Enum, auto
 
 from rclpy.action import ActionClient
 from moveit_msgs.action import MoveGroup, ExecuteTrajectory
+
 from action_msgs.msg import GoalStatus
+from moveit_msgs.msg import MoveItErrorCodes
 
 from franka_msgs.action import Homing, Grasp
 
@@ -93,10 +95,7 @@ class Drawing(Node):
         pose = [0.0, 0.0, -1.6]
         self.path_planner.add_box(box_id, frame_id, dimensions, pose)
 
-        self.poses = []
         self.queue = []
-        # [fx, fy, fz, tx, ty, tz] alternatively [N, N, N, Nm, Nm, Nm]
-        self.prev_ee_wrench = None
 
         self.rng = np.random.default_rng()
 
@@ -202,42 +201,50 @@ class Drawing(Node):
 
         """
         # check whether or not the marker is running into the board, maybe
-        if self.path_planner.gripper_available:
-            ee_wrench = self.path_planner.calc_EE_force()
-            if np.abs(ee_wrench[5] - self.prev_ee_wrench[5]) > 15:
-                self.path_planner.cancel_execution()
-
-            self.prev_ee_wrench = ee_wrench
+        self.get_logger().info(f"state: {self.state}")
+        # ee_wrench = self.path_planner.calc_EE_force()
 
         if self.state == State.LOAD_MOVES:
             self.load_move('a')
             self.state = State.PLANNING
+            self.prev_ee_wrench = self.path_planner.calc_EE_force()
 
         elif self.state == State.PLANNING and len(self.queue) != 0:
             current_queue_item = self.queue[0]
+            self.get_logger().info(f"{current_queue_item}")
             # if isinstance(current_queue_item, type(Grasp())) and self.path_planner.gripper_available:
             #     self.path_planner.MoveGripper()
             # else:
             await self.path_planner.get_goal_joint_states(current_queue_item)
-            await self.path_planner.plan_path()
+            # await self.path_planner.plan_path()
+            await self.path_planner.plan_cartesian_path(self.queue)
 
-            self.queue.pop(0)
+            self.queue.clear()
+            self.state = State.WAITING
+
+        elif self.state == State.EXECUTING:
+
+            await self.path_planner.execute_path()
             self.state = State.WAITING
 
         elif self.state == State.WAITING:
-            if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
+            ee_force = self.path_planner.current_joint_state.effort[5] / (
+                0.1070 + 0.1130)
+
+            if ee_force > 15:
+                await self.path_planner.cancel_execution()
+
+            # self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED or
+            if self.path_planner.cartesian_trajectory_error_code.val == 1:
                 self.state = State.EXECUTING
-                self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
+                self.path_planner.cartesian_trajectory_error_code.val = 0
+                # self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
             elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
                 self.state = State.PLANNING
                 self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
             elif self.path_planner.gripper_status == GoalStatus.STATUS_SUCCEEDED:
                 self.state = State.PLANNING
                 self.path_planner.gripper_status = GoalStatus.STATUS_UNKNOWN
-
-        elif self.state == State.EXECUTING:
-            await self.path_planner.execute_path()
-            self.state = State.WAITING
 
         elif len(self.queue) == 0:
             self.state = State.STOP

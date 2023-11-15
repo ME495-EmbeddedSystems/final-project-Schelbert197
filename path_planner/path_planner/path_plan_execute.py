@@ -30,6 +30,8 @@ from sensor_msgs.msg import JointState, MultiDOFJointState
 from moveit_msgs.msg import CollisionObject
 from shape_msgs.msg import SolidPrimitive
 
+from moveit_msgs.srv import GetCartesianPath
+
 from octomap_msgs.msg import OctomapWithPose, Octomap
 from moveit_msgs.srv import GetPositionIK
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -63,15 +65,10 @@ class Path_Plan_Execute():
             JointState, '/joint_states', self.joint_states_callback, 10)
         self.current_joint_state = JointState()
 
-        # subscribe to the control_msgs topic
-        # self.control_msgs = self.create
-
-        # TODO: populate joint names and positions from self.joint_states
-
         self.movegroup_client = ActionClient(self.node, MoveGroup,
                                              'move_action')
         self.client_cb_group = ReentrantCallbackGroup()
-        self.node.executetrajectory_client = ActionClient(
+        self.executetrajectory_client = ActionClient(
             self.node, ExecuteTrajectory, 'execute_trajectory')
         self.node.gripper_homing_client = ActionClient(
             self.node, Homing, 'panda_gripper/homing')
@@ -85,6 +82,10 @@ class Path_Plan_Execute():
 
         self.ik_client = self.node.create_client(
             GetPositionIK, 'compute_ik', callback_group=self.client_cb_group)
+
+        self.cartesian_path_client = self.node.create_client(
+            GetCartesianPath, 'compute_cartesian_path', callback_group=self.client_cb_group)
+
         while not self.ik_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info(
                 'IK service not available, waiting again...')
@@ -312,28 +313,33 @@ class Path_Plan_Execute():
         """Receive the message from the joint state subscriber."""
         self.current_joint_state = msg
         # self.node.get_logger().info(
-        #     f"panda_joint1: {self.current_joint_state.position[0]}\n")
+        #     f"ee_force x_dir = {self.current_joint_state.effort[5] / (0.1070 + 0.1130)}")
         # self.node.get_logger().info(
-        #     f"panda_joint2: {self.current_joint_state.position[1]}\n")
+        #     f"7: {self.current_joint_state.effort[5]}\n\n")
+
         # self.node.get_logger().info(
-        #     f"panda_joint3: {self.current_joint_state.position[2]}\n")
+        #     f"1: {self.current_joint_state.effort[0]}\n")
         # self.node.get_logger().info(
-        #     f"panda_joint4: {self.current_joint_state.position[3]}\n")
+        #     f"2: {self.current_joint_state.effort[1]}\n")
         # self.node.get_logger().info(
-        #     f"panda_joint5: {self.current_joint_state.position[4]}\n")
+        #     f"3: {self.current_joint_state.effort[2]}\n")
         # self.node.get_logger().info(
-        #     f"panda_joint6: {self.current_joint_state.position[5]}\n")
+        #     f"4: {self.current_joint_state.effort[3]}\n")
         # self.node.get_logger().info(
-        #     f"panda_joint7: {self.current_joint_state.position[6]}\n\n")
+        #     f"5: {self.current_joint_state.effort[4]}\n")
         # self.node.get_logger().info(
-        # #     f"panda_joint8: {self.current_joint_state.position[7]}\n")
-        # # self.node.get_logger().info(
-        # #     f"panda_joint9: {self.current_joint_state.position[8]}\n\n")
+        #     f"6: {self.current_joint_state.effort[5]}\n")
+        # self.node.get_logger().info(
+        #     f"7: {self.current_joint_state.effort[6]}\n\n")
+        # self.node.get_logger().info(
+        #     f"panda_joint8: {self.current_joint_state.position[7]}\n")
+        # self.node.get_logger().info(
+        #     f"panda_joint9: {self.current_joint_state.position[8]}\n\n")
 
     def calc_EE_force(self):
         thetalist = np.asarray(self.current_joint_state.position[:7])
         taulist = np.asarray(self.current_joint_state.effort[:7])
-        # self.node.get_logger().info(f"{self.current_joint_state.position}")
+        # self.node.get_logger().info(f"{self.current_joint_state.effort}")
         # self.node.get_logger().info(f"{thetalist}")
 
         Slist = np.array([[0, 0, 0, 0, 0, 0, 0], [0, 1, 0, -1, 0, -1, 0], [1, 0, 1, 0, 1, 0, -1],
@@ -367,7 +373,7 @@ class Path_Plan_Execute():
 
         position.group_name = self.node.group_name
         position.avoid_collisions = True
-        position.ik_link_name = 'panda_hand'
+        # position.ik_link_name = 'panda_hand'
         position.robot_state.joint_state.header = header
         position.robot_state.joint_state = joint_state
 
@@ -397,6 +403,44 @@ class Path_Plan_Execute():
         """
         result = await self.ik_callback(pose, self.current_joint_state)
         self.goal_joint_state = result.solution.joint_state
+
+    async def plan_cartesian_path(self, queue):
+        cartesian_path_request = GetCartesianPath.Request()
+
+        cartesian_path_request.header = Header(
+            stamp=self.node.get_clock().now().to_msg())
+        cartesian_path_request.start_state = RobotState(
+            joint_state=JointState(
+                header=Header(stamp=self.node.get_clock().now().to_msg()),
+                name=self.current_joint_state.name,
+                position=self.current_joint_state.position,
+                velocity=self.current_joint_state.velocity,
+                effort=self.current_joint_state.effort))
+        cartesian_path_request.group_name = self.node.group_name
+        cartesian_path_request.waypoints = queue
+        # setting this to 0.1 for now, could cause problems later
+        cartesian_path_request.max_step = 0.1
+        # cartesian_path_request.jump_threshold = 0
+        # cartesian_path_request.prismatic_jump_threshold = 0
+        # cartesian_path_request.revolute_jump_threshold = 0
+        cartesian_path_request.avoid_collisions = True
+        cartesian_path_request.max_velocity_scaling_factor = 0.1
+        cartesian_path_request.max_acceleration_scaling_factor = 1.0
+
+        cartesian_trajectory_result = await self.cartesian_path_client.call_async(cartesian_path_request)
+        self.cartesian_trajectory_start_state = cartesian_trajectory_result.start_state
+        # this is the trajectory we will execute
+        self.cartesian_trajectory_solution = cartesian_trajectory_result.solution
+        # fraction of the path the was computed (number of waypoints traveled through)
+        self.cartesian_trajectory_fraction = cartesian_trajectory_result.fraction
+        self.cartesian_trajectory_error_code = cartesian_trajectory_result.error_code
+
+        self.node.get_logger().info(
+            f"{self.cartesian_trajectory_fraction * 100}% of the path was computed!")
+        self.node.get_logger().info(
+            f"cartesian_trajectory error code: {self.cartesian_trajectory_error_code}")
+
+        self.planned_trajectory = self.cartesian_trajectory_solution
 
     async def plan_path(self):
         """
@@ -437,7 +481,7 @@ class Path_Plan_Execute():
         else:
             self.node.get_logger().error("Given pos is invalid")
 
-    def movegroup_goal_response_callback(self, future):
+    async def movegroup_goal_response_callback(self, future):
         """
         Provide a result from a callback function.
 
@@ -450,15 +494,15 @@ class Path_Plan_Execute():
         function
 
         """
-        self.goal_handle = future.result()
-        self.goal_handle_status = self.goal_handle.status
-        if not self.goal_handle.accepted:
+        goal_handle = future.result()
+        self.goal_handle_status = goal_handle.status
+        if not goal_handle.accepted:
             self.node.get_logger().info('Planning Goal Rejected :P')
             return
 
         self.node.get_logger().info('Planning Goal Accepted :)')
 
-        self.get_result_future = self.goal_handle.get_result_async()
+        self.get_result_future = goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_movegroup_result_callback)
 
@@ -497,17 +541,17 @@ class Path_Plan_Execute():
 
         Args:
         ----
-        request (int) : a dummy callback variable
-        response (int) : a dummy response variable
+        None
 
         """
-        self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
-        self.executetrajectory_result = None
+        # self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
+        # self.executetrajectory_result = None
 
         executetrajectory_goal_msg = ExecuteTrajectory.Goal()
         executetrajectory_goal_msg.trajectory = self.planned_trajectory
+        self.node.get_logger().info(f"wtf")
         self.send_goal_future = (
-            self.node.executetrajectory_client.send_goal_async(
+            self.executetrajectory_client.send_goal_async(
                 executetrajectory_goal_msg,
                 feedback_callback=self.feedback_callback
             )
@@ -515,7 +559,7 @@ class Path_Plan_Execute():
         self.send_goal_future.add_done_callback(
             self.executetrajectory_goal_response_callback)
 
-    def executetrajectory_goal_response_callback(self, future):
+    async def executetrajectory_goal_response_callback(self, future):
         """
         Provide a future result.
 
@@ -527,14 +571,14 @@ class Path_Plan_Execute():
         execute_path function
 
         """
-        self.goal_handle = future.result()
-        if not self.goal_handle.accepted:
+        goal_handle = future.result()
+        if not goal_handle.accepted:
             self.node.get_logger().info('Execute Goal Rejected :P')
             return
 
         self.node.get_logger().info('Execute Goal Accepted :)')
 
-        self.get_result_future = self.goal_handle.get_result_async()
+        self.get_result_future = goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_executetrajectory_result_callback)
 
@@ -588,7 +632,8 @@ class Path_Plan_Execute():
             self.node.get_logger().error("Given pos is invalid")
 
     async def cancel_execution(self):
-        self.cancel_execution_future = self.movegroup_client._cancel_goal_async(
+        self.node.get_logger().info(f"Canceling!!!!!!!!!!!!!!")
+        self.cancel_execution_future = self.executetrajectory_client._cancel_goal_async(
             self.goal_handle)
         self.cancel_execution_future.add_done_callback(
             self.cancel_execution_callback)
@@ -705,7 +750,7 @@ class Path_Plan_Execute():
         self.gripper_result = future.result().result
         self.gripper_status = future.result().status
 
-    def feedback_callback(self, feedback_msg):
+    async def feedback_callback(self, feedback_msg):
         """
         Provide a future result message.
 
