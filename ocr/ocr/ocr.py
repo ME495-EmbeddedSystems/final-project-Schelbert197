@@ -4,6 +4,8 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
+from paddleocr import PaddleOCR
+
 
 
 class Ocr(Node):
@@ -11,14 +13,10 @@ class Ocr(Node):
             super().__init__("ocr")
 
             self.timer = self.create_timer(1.0/200.0, self.timer_callback)
-
+            self.ocr = PaddleOCR(lang='en', det= False, use_gpu= False) # need to run only once to download and load model into memory
             self.cap = cv2.VideoCapture(0)
 
         def timer_callback(self):
-            """
-            Callback function.
-            This function gets called every 0.1 seconds.
-            """
             # Capture frame-by-frame
             # This method returns True/False as well
             # as the video frame.
@@ -27,10 +25,17 @@ class Ocr(Node):
             if ret == True:
                 # Display image
                 cv2.imshow("camera", frame)
-                
-                cv2.waitKey(1)  
+
+                if cv2.waitKey(1) & 0xFF == ord('c'): 
+                    result = self.ocr.ocr(frame, det=False, cls=False)
+                    for idx in range(len(result)):
+                        res = result[idx]
+                        for line in res:
+                            print(line)          
+                else:
+                    cv2.waitKey(1)  
             # Display the message on the console
-            self.get_logger().info('Publishing video frame')
+            # self.get_logger().info('Publishing video frame')
 
 def main(args=None):
     rclpy.init(args=args)
