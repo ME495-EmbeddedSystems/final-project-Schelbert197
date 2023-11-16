@@ -21,6 +21,9 @@ from franka_msgs.action import Homing, Grasp
 
 from geometry_msgs.msg import TransformStamped
 
+from trajectory_msgs.msg import JointTrajectory
+from std_msgs.msg import Header
+
 import numpy as np
 np.set_printoptions(suppress=True)
 
@@ -89,6 +92,10 @@ class Drawing(Node):
 
         self.tf = self.create_subscription(
             TransformStamped, '/tf', self.tf_callback, 10)
+
+        # create publisher
+        self.trajectory_pub = self.create_publisher(
+            JointTrajectory, '/panda_arm_controller/joint_trajectory', 10)
 
         # create services
         self.pick_service = self.create_service(
@@ -185,7 +192,6 @@ class Drawing(Node):
 
         for point in alphabet[letter]:
             pose = Pose()
-            self.get_logger().info(f"point: {point}")
             pose.position = Point(
                 x=self.current_pos.x, y=self.current_pos.y + point[0] * self.font_size, z=self.current_pos.z + point[1] * self.font_size)
             pose.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
@@ -252,10 +258,25 @@ class Drawing(Node):
 
                 self.touch_board_queue.pop(0)
 
-            elif self.state == State.EXECUTING:
+            elif self.state == State.EXECUTING and len(self.path_planner.robot_trajectories) != 0:
+                # self.path_planner.execute_path(
+                #     self.path_planner.robot_trajectories[0])
 
-                self.path_planner.execute_path()
-                self.state = State.WAITING
+                # joint_trajectory = JointTrajectory()
+                # joint_trajectory.header = Header(
+                #     stamp=self.get_clock().now().to_msg())
+                # joint_trajectory.joint_names = self.path_planner.current_joint_state.name
+                # joint_trajectory.points = [
+                #     self.path_planner.robot_trajectories[0]]
+
+                self.trajectory_pub.publish(
+                    self.path_planner.robot_trajectories[0].joint_trajectory)
+                self.path_planner.robot_trajectories.pop(0)
+
+                self.state = State.EXECUTING
+
+            elif self.state == State.EXECUTING and len(self.path_planner.robot_trajectories) == 0:
+                self.state = State.STOP
 
             elif self.state == State.CANCELING:
                 # cancel_execution_future = await self.path_planner.executetrajectory_client._cancel_goal_async(
@@ -294,13 +315,17 @@ class Drawing(Node):
                     self.state = State.CANCELING
 
                 elif self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
-
+                    # separate the planned trajectory into individual trajectories
+                    self.path_planner.execute_individual_trajectories()
                     self.state = State.EXECUTING
                     self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
 
                 elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
-
-                    self.state = State.PLANNING
+                    self.path_planner.robot_trajectories.pop(0)
+                    if len(self.path_planner.robot_trajectories) != 0:
+                        self.state = State.EXECUTING
+                    else:
+                        self.state = State.PLANNING
                     self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
 
             elif len(self.touch_board_queue) == 0:
@@ -329,7 +354,7 @@ class Drawing(Node):
 
             elif self.state == State.EXECUTING:
 
-                await self.path_planner.execute_path()
+                await self.path_planner.execute_path(self.path_planner.planned_trajectory)
                 self.state = State.WAITING
 
             elif self.state == State.WAITING:

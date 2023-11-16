@@ -22,7 +22,7 @@ from moveit_msgs.msg import (JointConstraint, TrajectoryConstraints,
                              Constraints, OrientationConstraint, PlanningScene, PlanningOptions,
                              RobotState, AllowedCollisionMatrix,
                              PlanningSceneWorld, MotionPlanRequest,
-                             WorkspaceParameters, PositionIKRequest)
+                             WorkspaceParameters, PositionIKRequest, RobotTrajectory)
 
 from moveit_msgs.msg import MoveItErrorCodes
 
@@ -131,6 +131,8 @@ class Path_Plan_Execute():
         self.L4 = 0.088
         self.L5 = 0.1070
 
+        self.robot_trajectories = []
+
         self.mass_matrix = np.array([[0.502922, -0.00659085, 0.476807, -0.00202931, 0.0526733, -0.000254634, -0.00282315],
                                      [-0.00659085, 0.476807, -0.00202931, 0.0526733, -
                                          0.000254634, -0.00282315, -0.00659085],
@@ -232,8 +234,8 @@ class Path_Plan_Execute():
             joint_constraint = JointConstraint()
             joint_constraint.joint_name = joint_state_name
             joint_constraint.position = self.goal_joint_state.position[i]
-            joint_constraint.tolerance_above = 0.01
-            joint_constraint.tolerance_below = 0.01
+            joint_constraint.tolerance_above = 0.05
+            joint_constraint.tolerance_below = 0.05
             joint_constraint.weight = 1.0
 
             joint_constraints.append(joint_constraint)
@@ -478,9 +480,6 @@ class Path_Plan_Execute():
         cartesian_path_request.max_velocity_scaling_factor = 0.1
         cartesian_path_request.max_acceleration_scaling_factor = 1.0
 
-        self.node.get_logger().info(
-            f"cartesian_path_request{cartesian_path_request}")
-
         cartesian_trajectory_result = await self.cartesian_path_client.call_async(cartesian_path_request)
         self.cartesian_trajectory_start_state = cartesian_trajectory_result.start_state
         # this is the trajectory we will execute
@@ -581,12 +580,23 @@ class Path_Plan_Execute():
         # append the calculated trajectory to our global variable
         # for excuting later
         self.planned_trajectory = self.movegroup_result.planned_trajectory
-        # self.executetrajectory_goal_msg.trajectory = (
-        #     self.movegroup_result.planned_trajectory
-        # )
+        # self.node.get_logger().info(
+        # f"planned_trajectory: {self.planned_trajectory}")
+
         self.node.get_logger().info("executetrajectory goal msg set!")
 
-    def execute_path(self):
+    def execute_individual_trajectories(self):
+
+        for point in self.planned_trajectory.joint_trajectory.points:
+            robot_trajectory = RobotTrajectory()
+            # robot_trajectory.joint_trajectory.header = Header(
+            #     stamp=self.node.get_clock().now().to_msg())
+            robot_trajectory.joint_trajectory.joint_names = self.planned_trajectory.joint_trajectory.joint_names
+            robot_trajectory.joint_trajectory.points = [point]
+
+            self.robot_trajectories.append(robot_trajectory)
+
+    def execute_path(self, trajectory):
         """
         Execute a previously planned path.
 
@@ -602,8 +612,10 @@ class Path_Plan_Execute():
         # self.executetrajectory_result = None
 
         executetrajectory_goal_msg = ExecuteTrajectory.Goal()
-        executetrajectory_goal_msg.trajectory = self.planned_trajectory
-        self.node.get_logger().info(f"wtf")
+        executetrajectory_goal_msg.trajectory = trajectory
+        self.node.get_logger().info(
+            f"current state: {self.current_joint_state}")
+        self.node.get_logger().info(f"trajectory: {trajectory}")
         self.send_goal_future = (
             self.executetrajectory_client.send_goal_async(
                 executetrajectory_goal_msg,
