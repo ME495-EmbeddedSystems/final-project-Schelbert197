@@ -625,16 +625,16 @@ class Path_Plan_Execute():
         execute_path function
 
         """
-        self.goal_handle = future.result()
+        self.executetrajectory_goal_handle = future.result()
         self.node.get_logger().info(
-            f"self.goal_handle: {self.goal_handle}")
-        if not self.goal_handle.accepted:
+            f"self.executetrajectory_goal_handle: {self.executetrajectory_goal_handle}")
+        if not self.executetrajectory_goal_handle.accepted:
             self.node.get_logger().info('Execute Goal Rejected :P')
             return
 
         self.node.get_logger().info('Execute Goal Accepted :)')
 
-        self.get_result_future = self.goal_handle.get_result_async()
+        self.get_result_future = self.executetrajectory_goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_executetrajectory_result_callback)
 
@@ -687,14 +687,13 @@ class Path_Plan_Execute():
         else:
             self.node.get_logger().error("Given pos is invalid")
 
-    async def cancel_execution(self):
+    def cancel_execution(self):
         self.node.get_logger().info(f"help")
-        self.cancel_execution_future = self.executetrajectory_client._cancel_goal_async(
-            self.goal_handle)
-        # self.cancel_execution_future.add_done_callback(
-        #     self.cancel_execution_callback)
+        self.cancel_execution_future = self.executetrajectory_goal_handle.cancel()
+        self.cancel_execution_future.add_done_callback(
+            self.cancel_execution_callback)
 
-    async def cancel_execution_callback(self, future):
+    def cancel_execution_callback(self, future):
         self.cancel_goal_handle = future.result()
         # self.cancel_goal_handle_status = self.cancel_goal_handle.status
         if not self.cancel_goal_handle.accepted:
@@ -705,7 +704,7 @@ class Path_Plan_Execute():
         self.get_result_future.add_done_callback(
             self.get_cancel_result_callback)
 
-    async def get_cancel_result_callback(self, future):
+    def get_cancel_result_callback(self, future):
         self.cancel_result = future.result().result
         self.cancel_status = future.result().status
 

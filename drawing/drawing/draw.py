@@ -153,8 +153,9 @@ class Drawing(Node):
         self.tf_tree = msg
         self.get_logger().info(f"tf: {self.tf_tree}")
 
-    async def cancel_goal_callback(self, request, response):
-        await self.path_planner.cancel_execution()
+    def cancel_goal_callback(self, request, response):
+        self.path_planner.cancel_execution()
+
         self.state = State.CANCELING
         return response
 
