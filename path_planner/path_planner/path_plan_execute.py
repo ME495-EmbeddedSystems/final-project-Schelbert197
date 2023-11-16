@@ -19,10 +19,12 @@ from std_msgs.msg import Header
 
 from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from moveit_msgs.msg import (JointConstraint, TrajectoryConstraints,
-                             Constraints, PlanningScene, PlanningOptions,
+                             Constraints, OrientationConstraint, PlanningScene, PlanningOptions,
                              RobotState, AllowedCollisionMatrix,
                              PlanningSceneWorld, MotionPlanRequest,
                              WorkspaceParameters, PositionIKRequest)
+
+from moveit_msgs.msg import MoveItErrorCodes
 
 from geometry_msgs.msg import Vector3, Pose, Point, Quaternion
 from sensor_msgs.msg import JointState, MultiDOFJointState
@@ -34,6 +36,7 @@ from moveit_msgs.srv import GetCartesianPath
 
 from octomap_msgs.msg import OctomapWithPose, Octomap
 from moveit_msgs.srv import GetPositionIK
+from moveit_msgs.srv import GetPositionFK
 from rclpy.callback_groups import ReentrantCallbackGroup
 
 from franka_msgs.action import Homing, Grasp
@@ -64,12 +67,13 @@ class Path_Plan_Execute():
         self.joint_states_subs = self.node.create_subscription(
             JointState, '/joint_states', self.joint_states_callback, 10)
         self.current_joint_state = JointState()
+        self.client_cb_group = ReentrantCallbackGroup()
 
         self.movegroup_client = ActionClient(self.node, MoveGroup,
-                                             'move_action')
-        self.client_cb_group = ReentrantCallbackGroup()
+                                             'move_action', callback_group=self.client_cb_group)
+
         self.executetrajectory_client = ActionClient(
-            self.node, ExecuteTrajectory, 'execute_trajectory')
+            self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=self.client_cb_group)
         self.node.gripper_homing_client = ActionClient(
             self.node, Homing, 'panda_gripper/homing')
         self.node.gripper_grasping_client = ActionClient(
@@ -79,6 +83,9 @@ class Path_Plan_Execute():
         if not self.node.gripper_grasping_client.wait_for_server(
                 timeout_sec=2):
             self.gripper_available = False
+
+        self.fk_client = self.node.create_client(
+            GetPositionFK, 'compute_fk', callback_group=self.client_cb_group)
 
         self.ik_client = self.node.create_client(
             GetPositionIK, 'compute_ik', callback_group=self.client_cb_group)
@@ -104,11 +111,19 @@ class Path_Plan_Execute():
 
         self.gripper_status = GoalStatus.STATUS_UNKNOWN
 
+        self.cancel_status = None
+
         self.goal_handle_status = None
         self.grasp_action_result = False
 
         self.goal_joint_state = None
         self.planned_trajectory = None
+
+        self.cartesian_trajectory_error_code = MoveItErrorCodes()
+        self.cartesian_trajectory_error_code.val = 0
+
+        self.fk_error_code = MoveItErrorCodes()
+        self.fk_error_code = 0
 
         self.L1 = 0.333
         self.L2 = 0.3160
@@ -217,8 +232,8 @@ class Path_Plan_Execute():
             joint_constraint = JointConstraint()
             joint_constraint.joint_name = joint_state_name
             joint_constraint.position = self.goal_joint_state.position[i]
-            joint_constraint.tolerance_above = 0.001
-            joint_constraint.tolerance_below = 0.001
+            joint_constraint.tolerance_above = 0.01
+            joint_constraint.tolerance_below = 0.01
             joint_constraint.weight = 1.0
 
             joint_constraints.append(joint_constraint)
@@ -227,6 +242,17 @@ class Path_Plan_Execute():
             Constraints(name='goal_constraints',
                         joint_constraints=joint_constraints)
         ]
+
+        # orientation_constraint = OrientationConstraint()
+        # orientation_constraint.header = Header(
+        #     stamp=self.node.get_clock().now().to_msg(), frame_id=self.node.frame_id)
+        # orientation_constraint.orientation = Quaternion(
+        #     x=0.0, y=-0.707, z=0.0, w=0.707)
+        # orientation_constraint.link_name = 'panda_hand_tcp'
+        # orientation_constraint.absolute_x_axis_tolerance = 0.5
+        # orientation_constraint.absolute_y_axis_tolerance = 0.5
+        # orientation_constraint.absolute_z_axis_tolerance = 0.5
+        # orientation_constraint.weight = 0.5
 
         movegroup_goal_msg.request.path_constraints = Constraints(
             name='',
@@ -351,6 +377,30 @@ class Path_Plan_Execute():
 
         return Ftip
 
+    async def fk_callback(self):
+        self.node.get_logger().info(
+            f"current_joint_state: {self.current_joint_state}")
+        request = GetPositionFK.Request()
+        request.header = Header(
+            stamp=self.node.get_clock().now().to_msg()
+        )
+        request.fk_link_names = ['panda_link1', 'panda_link2', 'panda_link3',
+                                 'panda_link4', 'panda_link5', 'panda_link6', 'panda_link7']
+        request.robot_state = RobotState(
+            joint_state=JointState(
+                header=Header(stamp=self.node.get_clock().now().to_msg()),
+                name=self.current_joint_state.name[:7],
+                position=self.current_joint_state.position[:7],
+                # velocity=self.current_joint_state.velocity,
+                # effort=self.current_joint_state.effort
+            ))
+
+        fk_result = await self.fk_client.call_async(request)
+        self.fk_pose = fk_result.pose_stamped
+        self.node.get_logger().info(f"fk_pose[]: {self.fk_pose}")
+        self.fk_link_name = fk_result.fk_link_names
+        self.fk_error_code = fk_result.error_code
+
     async def ik_callback(self, pose, joint_state):
         """
         Format the IK service message and send it.
@@ -373,7 +423,7 @@ class Path_Plan_Execute():
 
         position.group_name = self.node.group_name
         position.avoid_collisions = True
-        # position.ik_link_name = 'panda_hand'
+        position.ik_link_name = 'panda_hand'
         position.robot_state.joint_state.header = header
         position.robot_state.joint_state = joint_state
 
@@ -418,6 +468,7 @@ class Path_Plan_Execute():
                 effort=self.current_joint_state.effort))
         cartesian_path_request.group_name = self.node.group_name
         cartesian_path_request.waypoints = queue
+        cartesian_path_request.link_name = 'panda_hand'
         # setting this to 0.1 for now, could cause problems later
         cartesian_path_request.max_step = 0.1
         # cartesian_path_request.jump_threshold = 0
@@ -426,6 +477,9 @@ class Path_Plan_Execute():
         cartesian_path_request.avoid_collisions = True
         cartesian_path_request.max_velocity_scaling_factor = 0.1
         cartesian_path_request.max_acceleration_scaling_factor = 1.0
+
+        self.node.get_logger().info(
+            f"cartesian_path_request{cartesian_path_request}")
 
         cartesian_trajectory_result = await self.cartesian_path_client.call_async(cartesian_path_request)
         self.cartesian_trajectory_start_state = cartesian_trajectory_result.start_state
@@ -442,7 +496,7 @@ class Path_Plan_Execute():
 
         self.planned_trajectory = self.cartesian_trajectory_solution
 
-    async def plan_path(self):
+    def plan_path(self):
         """
         Plan a path using the robots joint states and other parameters.
 
@@ -481,7 +535,7 @@ class Path_Plan_Execute():
         else:
             self.node.get_logger().error("Given pos is invalid")
 
-    async def movegroup_goal_response_callback(self, future):
+    def movegroup_goal_response_callback(self, future):
         """
         Provide a result from a callback function.
 
@@ -494,15 +548,15 @@ class Path_Plan_Execute():
         function
 
         """
-        goal_handle = future.result()
-        self.goal_handle_status = goal_handle.status
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        self.movegroup_goal_handle_status = self.goal_handle.status
+        if not self.goal_handle.accepted:
             self.node.get_logger().info('Planning Goal Rejected :P')
             return
 
         self.node.get_logger().info('Planning Goal Accepted :)')
 
-        self.get_result_future = goal_handle.get_result_async()
+        self.get_result_future = self.goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_movegroup_result_callback)
 
@@ -532,7 +586,7 @@ class Path_Plan_Execute():
         # )
         self.node.get_logger().info("executetrajectory goal msg set!")
 
-    async def execute_path(self):
+    def execute_path(self):
         """
         Execute a previously planned path.
 
@@ -559,7 +613,7 @@ class Path_Plan_Execute():
         self.send_goal_future.add_done_callback(
             self.executetrajectory_goal_response_callback)
 
-    async def executetrajectory_goal_response_callback(self, future):
+    def executetrajectory_goal_response_callback(self, future):
         """
         Provide a future result.
 
@@ -571,14 +625,16 @@ class Path_Plan_Execute():
         execute_path function
 
         """
-        goal_handle = future.result()
-        if not goal_handle.accepted:
+        self.goal_handle = future.result()
+        self.node.get_logger().info(
+            f"self.goal_handle: {self.goal_handle}")
+        if not self.goal_handle.accepted:
             self.node.get_logger().info('Execute Goal Rejected :P')
             return
 
         self.node.get_logger().info('Execute Goal Accepted :)')
 
-        self.get_result_future = goal_handle.get_result_async()
+        self.get_result_future = self.goal_handle.get_result_async()
         self.get_result_future.add_done_callback(
             self.get_executetrajectory_result_callback)
 
@@ -632,15 +688,15 @@ class Path_Plan_Execute():
             self.node.get_logger().error("Given pos is invalid")
 
     async def cancel_execution(self):
-        self.node.get_logger().info(f"Canceling!!!!!!!!!!!!!!")
+        self.node.get_logger().info(f"help")
         self.cancel_execution_future = self.executetrajectory_client._cancel_goal_async(
             self.goal_handle)
-        self.cancel_execution_future.add_done_callback(
-            self.cancel_execution_callback)
+        # self.cancel_execution_future.add_done_callback(
+        #     self.cancel_execution_callback)
 
     async def cancel_execution_callback(self, future):
         self.cancel_goal_handle = future.result()
-        self.cancel_goal_handle_status = self.cancel_goal_handle.status
+        # self.cancel_goal_handle_status = self.cancel_goal_handle.status
         if not self.cancel_goal_handle.accepted:
             self.node.get_logger().info('Cancel Goal Rejected :P')
             return

@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 from std_srvs.srv import Empty
-from geometry_msgs.msg import Point, Quaternion, Pose
+from geometry_msgs.msg import Point, Quaternion, Pose, PoseStamped
 from path_planner.path_plan_execute import Path_Plan_Execute
 
 from character_interfaces.alphabet import alphabet
@@ -19,19 +19,25 @@ from moveit_msgs.msg import MoveItErrorCodes
 
 from franka_msgs.action import Homing, Grasp
 
+from geometry_msgs.msg import TransformStamped
+
 import numpy as np
 np.set_printoptions(suppress=True)
 
 
 class State(Enum):
-    START = auto()
-    CLOSE = auto()
-    FINISH = auto()
-    STOP = auto()
+
+    TOUCHING_BOARD = auto()
+    WRITING_LETTERS = auto()
+
+    CALIBRATE = auto()
+    FK = auto()
 
     LOAD_MOVES = auto()
+    STOP = auto()
     PLANNING = auto()
     EXECUTING = auto()
+    CANCELING = auto()
     WAITING = auto()
 
 
@@ -76,8 +82,13 @@ class Drawing(Node):
         self.joint_pos = []
         self.client_cb_group = ReentrantCallbackGroup()
         self.timer = self.create_timer(
-            0.5, self.timer_callback, callback_group=self.client_cb_group)
+            0.01, self.timer_callback, callback_group=self.client_cb_group)
         self.path_planner = Path_Plan_Execute(self)
+
+        # create subscriber
+
+        self.tf = self.create_subscription(
+            TransformStamped, '/tf', self.tf_callback, 10)
 
         # create services
         self.pick_service = self.create_service(
@@ -87,7 +98,7 @@ class Drawing(Node):
             Box, "add_box", self.add_box_callback)
 
         self.cancel_goal = self.create_service(
-            Empty, 'cancel_goal', self.cancel_goal_callback)
+            Empty, 'cancel_goal', self.cancel_goal_callback, callback_group=self.client_cb_group)
 
         box_id = 'box'
         frame_id = 'panda_link0'
@@ -95,32 +106,24 @@ class Drawing(Node):
         pose = [0.0, 0.0, -1.6]
         self.path_planner.add_box(box_id, frame_id, dimensions, pose)
 
-        self.queue = []
+        self.font_size = 0.1
+        self.touch_board_queue = []
+        self.letter_queue = []
 
-        self.rng = np.random.default_rng()
-
-        self.ans = 0
+        self.stage = State.STOP
         self.state = State.STOP
-        self.result = False
-        # being used for looping through to Open/Close gripper
-        self.counter = 0
 
-    def pick_callback(self, request, response):
-        """
-        Listen for a callback from the pick service.
+        self.L1 = 0.1070  # length of panda_link7
+        self.L2 = 0.1130  # distancefrom panda_joint7 to gripper tips
 
-        Listens for a callback from the pick service. When a service call
-        is received, set the state to START.
+        self.force_offset = 0
+        self.calibration_counter = 0
 
-        Args:
-        ----
-            request: The service call's request containing data.
-            response: This node does not deliver a response.
+        self.current_pos = Point(x=0.0, y=0.0, z=0.0)
 
-        """
-        self.state = State.LOAD_MOVES
+        self.prev_state = State.STOP
 
-        return response
+        self.tf_tree = None
 
     def add_box_callback(self, request, response):
         """
@@ -146,10 +149,28 @@ class Drawing(Node):
         self.path_planner.add_box(box_id, frame_id, dimensions, pose)
         return response
 
-    def cancel_goal_callback(self):
-        self.path_planner.cancel_execution()
+    def tf_callback(self, msg):
+        self.tf_tree = msg
+        self.get_logger().info(f"tf: {self.tf_tree}")
 
-    def load_move(self, letter):
+    async def cancel_goal_callback(self, request, response):
+        await self.path_planner.cancel_execution()
+        self.state = State.CANCELING
+        return response
+
+    def queue_touch_board_moves(self):
+        pose1 = Pose()
+        pose1.position = Point(x=-self.x_init, y=self.y_init, z=0.4)
+        pose1.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+
+        pose2 = Pose()
+        pose2.position = Point(x=-self.x_init - 0.3, y=self.y_init, z=0.4)
+        pose2.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+
+        self.touch_board_queue.append(pose1)
+        self.touch_board_queue.append(pose2)
+
+    def queue_letter(self, letter):
         # pose1 = Pose()
         # pose1.position = Point(x=self.x_init, y=self.y_init, z=0.05)
         # pose1.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
@@ -163,10 +184,11 @@ class Drawing(Node):
 
         for point in alphabet[letter]:
             pose = Pose()
+            self.get_logger().info(f"point: {point}")
             pose.position = Point(
-                x=self.x_init, y=self.y_init+point[0], z=0.4+point[1])
-            pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-            self.queue.append(pose)
+                x=self.current_pos.x, y=self.current_pos.y + point[0] * self.font_size, z=self.current_pos.z + point[1] * self.font_size)
+            pose.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+            self.letter_queue.append(pose)
 
     def pick_callback(self, request, response):
         """
@@ -181,7 +203,8 @@ class Drawing(Node):
             response: This node does not deliver a response.
 
         """
-        self.state = State.LOAD_MOVES
+        self.stage = State.TOUCHING_BOARD
+        self.state = State.CALIBRATE
 
         return response
 
@@ -201,53 +224,142 @@ class Drawing(Node):
 
         """
         # check whether or not the marker is running into the board, maybe
-        self.get_logger().info(f"state: {self.state}")
-        # ee_wrench = self.path_planner.calc_EE_force()
+        # self.get_logger().info(f"stage: {self.stage}")
+        # self.get_logger().info(f"state: {self.state}\n")
 
-        if self.state == State.LOAD_MOVES:
-            self.load_move('a')
-            self.state = State.PLANNING
-            self.prev_ee_wrench = self.path_planner.calc_EE_force()
+        if self.stage == State.TOUCHING_BOARD:
+            if self.state == State.CALIBRATE:
+                calibration_cycles = 100
+                while self.calibration_counter < calibration_cycles:
+                    self.force_offset += self.path_planner.current_joint_state.effort[5] / (
+                        self.L1 + self.L2)
+                    self.calibration_counter += 1
 
-        elif self.state == State.PLANNING and len(self.queue) != 0:
-            current_queue_item = self.queue[0]
-            self.get_logger().info(f"{current_queue_item}")
-            # if isinstance(current_queue_item, type(Grasp())) and self.path_planner.gripper_available:
-            #     self.path_planner.MoveGripper()
-            # else:
-            await self.path_planner.get_goal_joint_states(current_queue_item)
-            # await self.path_planner.plan_path()
-            await self.path_planner.plan_cartesian_path(self.queue)
+                self.force_offset = self.force_offset/calibration_cycles
+                self.state = State.LOAD_MOVES
 
-            self.queue.clear()
-            self.state = State.WAITING
-
-        elif self.state == State.EXECUTING:
-
-            await self.path_planner.execute_path()
-            self.state = State.WAITING
-
-        elif self.state == State.WAITING:
-            ee_force = self.path_planner.current_joint_state.effort[5] / (
-                0.1070 + 0.1130)
-
-            if ee_force > 15:
-                await self.path_planner.cancel_execution()
-
-            # self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED or
-            if self.path_planner.cartesian_trajectory_error_code.val == 1:
-                self.state = State.EXECUTING
-                self.path_planner.cartesian_trajectory_error_code.val = 0
-                # self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
-            elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
+            elif self.state == State.LOAD_MOVES:
+                self.queue_touch_board_moves()
                 self.state = State.PLANNING
-                self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
-            elif self.path_planner.gripper_status == GoalStatus.STATUS_SUCCEEDED:
-                self.state = State.PLANNING
-                self.path_planner.gripper_status = GoalStatus.STATUS_UNKNOWN
 
-        elif len(self.queue) == 0:
-            self.state = State.STOP
+            elif self.state == State.PLANNING and len(self.touch_board_queue) != 0:
+
+                await self.path_planner.get_goal_joint_states(self.touch_board_queue[0])
+                self.path_planner.plan_path()
+
+                self.state = State.WAITING
+
+                self.touch_board_queue.pop(0)
+
+            elif self.state == State.EXECUTING:
+
+                self.path_planner.execute_path()
+                self.state = State.WAITING
+
+            elif self.state == State.CANCELING:
+                # cancel_execution_future = await self.path_planner.executetrajectory_client._cancel_goal_async(
+                #     self.path_planner.executetrajectory_goal_handle)
+                # cancel_goal_handle = cancel_execution_future.result()
+                # self.get_logger().info(
+                #     f"cancel_goal_handle: {cancel_goal_handle}")
+                # if cancel_goal_handle is not None:
+
+                #     if not cancel_goal_handle.accepted:
+                #         self.node.get_logger().info('Cancel Goal Rejected :P')
+                #         return
+
+                #     get_result_future = self.cancel_goal_handle.get_result_async()
+
+                #     if get_result_future is not None:
+                #         cancel_result = get_result_future.result().result
+                #         cancel_status = get_result_future.result().status
+                #         self.get_logger().info(
+                #             f"cancel_status: {cancel_status}")
+
+                if self.path_planner.cancel_status == GoalStatus.STATUS_SUCCEEDED:
+                    self.stage = State.WRITING_LETTERS
+                    self.state = State.FK
+
+            elif self.state == State.WAITING:
+
+                ee_force = self.path_planner.current_joint_state.effort[5] / (
+                    self.L1 + self.L2) - self.force_offset
+
+                # self.get_logger().info(f"ee_force: {ee_force}")
+
+                if ee_force > 3:
+
+                    await self.path_planner.cancel_execution()
+                    self.state = State.CANCELING
+
+                elif self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
+
+                    self.state = State.EXECUTING
+                    self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
+
+                elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
+
+                    self.state = State.PLANNING
+                    self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
+
+            elif len(self.touch_board_queue) == 0:
+
+                self.stage = State.WRITING_LETTERS
+                self.state = State.FK
+
+        elif self.stage == State.WRITING_LETTERS:
+
+            if self.state == State.FK:
+
+                await self.path_planner.fk_callback()
+                self.current_pos = self.path_planner.fk_pose[6].pose.position
+                self.state = State.LOAD_MOVES
+
+            elif self.state == State.LOAD_MOVES:
+
+                self.queue_letter('a')
+                self.state = State.PLANNING
+
+            elif self.state == State.PLANNING and len(self.letter_queue) != 0:
+
+                await self.path_planner.plan_cartesian_path(self.letter_queue)
+                self.letter_queue.clear()
+                self.state = State.WAITING
+
+            elif self.state == State.EXECUTING:
+
+                await self.path_planner.execute_path()
+                self.state = State.WAITING
+
+            elif self.state == State.WAITING:
+
+                ee_force = self.path_planner.current_joint_state.effort[5] / (
+                    self.L1 + self.L2) - self.force_offset
+
+                if ee_force > 2.5:
+
+                    self.path_planner.cancel_execution()
+                    self.state = State.CANCELING
+
+                elif self.path_planner.fk_error_code.val == 1:
+
+                    self.state = State.LOAD_MOVES
+                    self.path_planner.fk_error_code.val = 0
+
+                elif self.path_planner.cartesian_trajectory_error_code.val == 1:
+
+                    self.state = State.EXECUTING
+                    self.path_planner.cartesian_trajectory_error_code.val = 0
+
+                elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
+
+                    self.state = State.PLANNING
+                    self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
+
+            elif len(self.letter_queue) == 0:
+
+                self.stage = State.STOP
+                self.state = State.STOP
 
 
 def main(args=None):
