@@ -46,13 +46,11 @@ class Ocr(Node):
             # # Display the message on the console
             # # self.get_logger().info('Publishing video frame')
 
-            self.image_modification()
-            # if frame != None:
-            #     result = self.ocr.ocr(frame, det=False, cls=False)
-            #     print(result)
+            frame = self.image_modification()
+            if  cv2.waitKey(1) & 0xFF == ord('c'):
+                result = self.ocr.ocr(frame, det=False, cls=False)
+                print(result)
 
-
-        
         def image_modification(self):
             # Capture frame-by-frame
             # This method returns True/False as well
@@ -67,9 +65,10 @@ class Ocr(Node):
                 # cv2.imshow("resized", resized_image)
                 gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
                 # cv2.imshow("gray", gray)
-                blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-                edged = cv2.Canny(blurred, 50, 200, 255)
-                cv2.imshow("edged", edged)
+                blurred = cv2.GaussianBlur(gray, (11, 11), 0)
+                cv2.imshow("blurred", blurred)
+                edged = cv2.Canny(blurred, 50, 200)
+                # cv2.imshow("edged", edged)
 
                 # find contours in the edge map, then sort them by their
                 # size in descending order
@@ -99,6 +98,11 @@ class Ocr(Node):
                     pass
 
                 cv2.waitKey(1)
+
+                try:
+                    return warped
+                except:
+                    return 0
 
 
              
