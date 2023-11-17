@@ -3,9 +3,17 @@ import imutils
 from imutils.perspective import four_point_transform
 from imutils import contours
 
+def nothing(x):
+    pass
+
 class CV():
     def __init__(self):
         self.cap = cv2.VideoCapture(0)
+        cv2.namedWindow('Parameters')
+        cv2.createTrackbar('Canny_T_min', 'Parameters', 0, 255, nothing)
+        cv2.createTrackbar('Canny_T_max', 'Parameters', 0, 255, nothing)
+        cv2.setTrackbarPos('Canny_T_max', 'Parameters', 255)
+
 
     def image_modification(self):
         # Capture frame-by-frame
@@ -23,8 +31,14 @@ class CV():
             # cv2.imshow("gray", gray)
             blurred = cv2.GaussianBlur(gray, (11, 11), 0)
             cv2.imshow("blurred", blurred)
-            edged = cv2.Canny(blurred, 50, 200)
-            # cv2.imshow("edged", edged)
+
+            ret3,th3 = cv2.threshold(blurred,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            cv2.imshow("binarized", th3)
+
+            c_min = cv2.getTrackbarPos('Canny_T_min', 'Parameters')
+            c_max = cv2.getTrackbarPos('Canny_T_max', 'Parameters')
+            edged = cv2.Canny(blurred, c_min, c_max)
+            cv2.imshow("edged", edged)
 
             # find contours in the edge map, then sort them by their
             # size in descending order
