@@ -8,7 +8,7 @@ from path_planner.path_plan_execute import Path_Plan_Execute
 from character_interfaces.alphabet import alphabet
 from joint_interfaces.msg import JointTrajectories
 
-from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from box_adder_interfaces.srv import Box
 from enum import Enum, auto
 
@@ -17,7 +17,14 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import TransformStamped
 
 from trajectory_msgs.msg import JointTrajectory
-from std_msgs.msg import Header, String
+from std_msgs.msg import Header, String, Float32
+
+from moveit_msgs.srv import GetCartesianPath
+
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+
+import tf2_ros
 
 import numpy as np
 np.set_printoptions(suppress=True)
@@ -78,18 +85,20 @@ class Drawing(Node):
         # Initialize variables
         self.joint_names = []
         self.joint_pos = []
-        self.client_cb_group = ReentrantCallbackGroup()
+        self.timer_callback_group = MutuallyExclusiveCallbackGroup()
+        self.chatting_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
-            0.5, self.timer_callback, callback_group=self.client_cb_group)
+            0.05, self.timer_callback, callback_group=self.timer_callback_group)
+
         self.path_planner = Path_Plan_Execute(self)
 
         # create subscriber
 
-        self.tf = self.create_subscription(
-            TransformStamped, '/tf', self.tf_callback, 10)
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
 
         self.chatting_sub = self.create_subscription(
-            String, '/chatting', self.chatting_callback, 10)
+            String, '/chatting', self.chatting_callback, 10, callback_group=self.chatting_callback_group)
 
         # create publisher
         self.trajectory_pub = self.create_publisher(
@@ -97,6 +106,9 @@ class Drawing(Node):
 
         self.joint_traj_pub = self.create_publisher(
             JointTrajectories, '/joint_trajectories', 10)
+
+        self.force_pub = self.create_publisher(
+            Float32, '/ee_force', 10)
 
         # create services
         self.pick_service = self.create_service(
@@ -120,47 +132,68 @@ class Drawing(Node):
 
         self.prev_state = State.STOP
 
-        self.tf_tree = None
-
-    def tf_callback(self, msg):
-        self.tf_tree = msg.transforms
-        # self.get_logger().info(f"tf: {self.tf_tree}")
-
     def chatting_callback(self, msg):
         if msg.data == "done":
             self.state = State.PLANNING
 
-        self.get_logger().info("fhdsa;lfjdls;aksalk;fjsdal;jf")
+    def get_transform(self, parent_frame, child_frame):
+        """
+        Try catch block for Listning transforms between parent and child frame.
+
+        Args:
+        ----
+            parent_frame (string): name of parent frame
+            child_frame (string): name of child frame
+
+        Returns
+        -------
+            brick_to_platform: the x,y,z of the translational transform
+
+        """
+        try:
+            trans = self.buffer.lookup_transform(
+                parent_frame, child_frame, rclpy.time.Time()
+            )
+            transl = trans.transform.translation
+            rot = trans.transform.rotation
+            brick_to_platform = [transl.x, transl.y, transl.z]
+            rotation = [rot.x, rot.y, rot.z, rot.w]
+
+            # print(brick_to_platform[2])
+            return brick_to_platform, rotation
+
+        except tf2_ros.LookupException as e:
+            # the frames don't exist yet
+            self.get_logger().info(f"Lookup exception: {e}")
+            return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
+        except tf2_ros.ConnectivityException as e:
+            # the tf tree has a disconnection
+            self.get_logger().info(f"Connectivity exception: {e}")
+            return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
+        except tf2_ros.ExtrapolationException as e:
+            # the times are two far apart to extrapolate
+            self.get_logger().info(f"Extrapolation exception: {e}")
+            return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     def queue_touch_board_moves(self):
         pose1 = Pose()
         pose1.position = Point(x=-self.x_init, y=self.y_init, z=0.4)
-        pose1.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+        pose1.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
         pose2 = Pose()
-        pose2.position = Point(x=-self.x_init - 0.2, y=self.y_init, z=0.4)
-        pose2.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+        pose2.position = Point(x=-self.x_init - 0.3, y=self.y_init, z=0.4)
+        pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
         self.touch_board_queue.append(pose1)
         self.touch_board_queue.append(pose2)
 
     def queue_letter(self, letter):
-        # pose1 = Pose()
-        # pose1.position = Point(x=self.x_init, y=self.y_init, z=0.05)
-        # pose1.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-
-        # pose2 = Pose()
-        # pose2.position = Point(x=0.2, y=0.3, z=0.5)
-        # pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-
-        # self.queue.append(pose1)
-        # self.queue.append(pose2)
 
         for point in alphabet[letter]:
             pose = Pose()
             pose.position = Point(
                 x=self.current_pos.x, y=self.current_pos.y + point[0] * self.font_size, z=self.current_pos.z + point[1] * self.font_size)
-            pose.orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+            pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
             self.letter_queue.append(pose)
 
     def pick_callback(self, request, response):
@@ -238,37 +271,21 @@ class Drawing(Node):
                     joint_trajectories.clear = True
                     joint_trajectories.state = "stop"
 
-                joint_trajectories.joint_trajectories = self.path_planner.joint_trajectories
+                joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
                 self.joint_traj_pub.publish(joint_trajectories)
 
                 self.state = State.WAITING
 
-                # for i, _ in enumerate(self.path_planner.current_joint_state.position[:7]):
-                #     go_ahead = True
-                #     if self.path_planner.current_joint_state.position[i] < self.path_planner.joint_trajectories[0].points[0].positions[i] - 0.01 \
-                #             or self.path_planner.current_joint_state.position[i] > self.path_planner.joint_trajectories[0].points[0].positions[i] + 0.01:
-                #         go_ahead = False
-
-                # self.get_logger().info(f"go_ahead = {go_ahead}")
-
-                # if go_ahead:
-                # self.path_planner.joint_trajectories[0].header = Header(
-                #     stamp=self.get_clock().now().to_msg())
-                # self.trajectory_pub.publish(
-                #     self.path_planner.joint_trajectories[0])
-                # self.path_planner.joint_trajectories.pop(0)
-                # else:
-                # self.path_planner.joint_trajectories[0].header = Header(
-                #     stamp=self.get_clock().now().to_msg())
-                # self.trajectory_pub.publish(
-                #     self.path_planner.joint_trajectories[0])
-
             elif self.state == State.WAITING:
+
+                ee_force = self.path_planner.current_joint_state.effort[5] / (
+                    self.L1 + self.L2) - self.force_offset
+
+                self.force_pub.publish(Float32(data=ee_force))
 
                 if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
                     # separate the planned trajectory into individual trajectories
-                    self.path_planner.execute_individual_trajectories()
                     self.state = State.EXECUTING
 
                     self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
@@ -282,8 +299,9 @@ class Drawing(Node):
 
             if self.state == State.FK:
 
-                await self.path_planner.fk_callback()
-                self.current_pos = self.path_planner.fk_pose[6].pose.position
+                trans, rotation = self.get_transform(
+                    'panda_link0', 'panda_hand_tcp')
+                self.current_pos = trans
                 self.state = State.LOAD_MOVES
 
             elif self.state == State.LOAD_MOVES:
@@ -294,27 +312,19 @@ class Drawing(Node):
             elif self.state == State.PLANNING and len(self.letter_queue) != 0:
 
                 await self.path_planner.plan_cartesian_path(self.letter_queue)
-                self.letter_queue.pop(0)
-                self.state = State.WAITING
+
+                # self.get_logger().info(f"letter_queue: {self.letter_queue}")
+                self.letter_queue.clear()
+                self.state = State.EXECUTING
 
             elif self.state == State.EXECUTING:
 
-                await self.path_planner.execute_path()
+                self.path_planner.execute_path()
                 self.state = State.WAITING
 
             elif self.state == State.WAITING:
 
-                if self.path_planner.fk_error_code.val == 1:
-
-                    self.state = State.LOAD_MOVES
-                    self.path_planner.fk_error_code.val = 0
-
-                elif self.path_planner.cartesian_trajectory_error_code.val == 1:
-
-                    self.state = State.EXECUTING
-                    self.path_planner.cartesian_trajectory_error_code.val = 0
-
-                elif self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
+                if self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
 
                     self.state = State.PLANNING
                     self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN

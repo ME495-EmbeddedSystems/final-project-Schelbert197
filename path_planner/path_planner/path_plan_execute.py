@@ -37,7 +37,7 @@ from moveit_msgs.srv import GetCartesianPath
 from octomap_msgs.msg import OctomapWithPose, Octomap
 from moveit_msgs.srv import GetPositionIK
 from moveit_msgs.srv import GetPositionFK
-from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 
@@ -66,16 +66,21 @@ class Path_Plan_Execute():
         self.node = node
 
         # getting current joint states
+        self.joint_states_callback_group = MutuallyExclusiveCallbackGroup()
         self.joint_states_subs = self.node.create_subscription(
-            JointState, '/joint_states', self.joint_states_callback, 10)
+            JointState, '/joint_states', self.joint_states_callback, 10, callback_group=self.joint_states_callback_group)
         self.current_joint_state = JointState()
-        self.client_cb_group = ReentrantCallbackGroup()
+        self.fk_callback_group = MutuallyExclusiveCallbackGroup()
+        self.ik_callback_group = MutuallyExclusiveCallbackGroup()
+        self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
+        self.movegroup_callback_group = MutuallyExclusiveCallbackGroup()
+        self.executetrajectory_callback_group = MutuallyExclusiveCallbackGroup()
 
         self.movegroup_client = ActionClient(self.node, MoveGroup,
-                                             'move_action', callback_group=self.client_cb_group)
+                                             'move_action', callback_group=self.movegroup_callback_group)
 
         self.executetrajectory_client = ActionClient(
-            self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=self.client_cb_group)
+            self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=self.executetrajectory_callback_group)
         self.node.gripper_homing_client = ActionClient(
             self.node, Homing, 'panda_gripper/homing')
         self.node.gripper_grasping_client = ActionClient(
@@ -87,15 +92,21 @@ class Path_Plan_Execute():
             self.gripper_available = False
 
         self.fk_client = self.node.create_client(
-            GetPositionFK, 'compute_fk', callback_group=self.client_cb_group)
+            GetPositionFK, 'compute_fk', callback_group=self.fk_callback_group)
 
         self.ik_client = self.node.create_client(
-            GetPositionIK, 'compute_ik', callback_group=self.client_cb_group)
+            GetPositionIK, 'compute_ik', callback_group=self.ik_callback_group)
 
         self.cartesian_path_client = self.node.create_client(
-            GetCartesianPath, 'compute_cartesian_path', callback_group=self.client_cb_group)
+            GetCartesianPath, 'compute_cartesian_path', callback_group=self.cartesian_callback_group)
 
         while not self.ik_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                'IK service not available, waiting again...')
+        while not self.fk_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                'IK service not available, waiting again...')
+        while not self.cartesian_path_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info(
                 'IK service not available, waiting again...')
 
@@ -132,8 +143,6 @@ class Path_Plan_Execute():
         self.L3 = 0.3840
         self.L4 = 0.088
         self.L5 = 0.1070
-
-        self.joint_trajectories = []
 
         self.mass_matrix = np.array([[0.502922, -0.00659085, 0.476807, -0.00202931, 0.0526733, -0.000254634, -0.00282315],
                                      [-0.00659085, 0.476807, -0.00202931, 0.0526733, -
@@ -247,16 +256,16 @@ class Path_Plan_Execute():
                         joint_constraints=joint_constraints)
         ]
 
-        # orientation_constraint = OrientationConstraint()
-        # orientation_constraint.header = Header(
-        #     stamp=self.node.get_clock().now().to_msg(), frame_id=self.node.frame_id)
-        # orientation_constraint.orientation = Quaternion(
-        #     x=0.0, y=-0.707, z=0.0, w=0.707)
-        # orientation_constraint.link_name = 'panda_hand_tcp'
-        # orientation_constraint.absolute_x_axis_tolerance = 0.5
-        # orientation_constraint.absolute_y_axis_tolerance = 0.5
-        # orientation_constraint.absolute_z_axis_tolerance = 0.5
-        # orientation_constraint.weight = 0.5
+        orientation_constraint = OrientationConstraint()
+        orientation_constraint.header = Header(
+            stamp=self.node.get_clock().now().to_msg(), frame_id=self.node.frame_id)
+        orientation_constraint.orientation = Quaternion(
+            x=0.0, y=1.0, z=0.0, w=0.0)
+        orientation_constraint.link_name = 'panda_hand'
+        orientation_constraint.absolute_x_axis_tolerance = 0.1
+        orientation_constraint.absolute_y_axis_tolerance = 0.1
+        orientation_constraint.absolute_z_axis_tolerance = 0.1
+        orientation_constraint.weight = 1.0
 
         movegroup_goal_msg.request.path_constraints = Constraints(
             name='',
@@ -385,26 +394,26 @@ class Path_Plan_Execute():
         return Ftip
 
     async def fk_callback(self):
-        self.node.get_logger().info(
-            f"current_joint_state: {self.current_joint_state}")
+        # self.node.get_logger().info(
+        #     f"current_joint_state: {self.current_joint_state}")
         request = GetPositionFK.Request()
         request.header = Header(
             stamp=self.node.get_clock().now().to_msg()
         )
-        request.fk_link_names = ['panda_link1', 'panda_link2', 'panda_link3',
-                                 'panda_link4', 'panda_link5', 'panda_link6', 'panda_link7']
+        request.fk_link_names = ['panda_link0', 'panda_link1', 'panda_link2', 'panda_link3',
+                                 'panda_link4', 'panda_link5', 'panda_link6', 'panda_link7', 'panda_hand_tcp']
         request.robot_state = RobotState(
             joint_state=JointState(
                 header=Header(stamp=self.node.get_clock().now().to_msg()),
-                name=self.current_joint_state.name[:7],
-                position=self.current_joint_state.position[:7],
+                name=self.current_joint_state.name,
+                position=self.current_joint_state.position,
                 # velocity=self.current_joint_state.velocity,
                 # effort=self.current_joint_state.effort
             ))
 
         fk_result = await self.fk_client.call_async(request)
         self.fk_pose = fk_result.pose_stamped
-        self.node.get_logger().info(f"fk_pose[]: {self.fk_pose}")
+        # self.node.get_logger().info(f"fk_pose[]: {self.fk_pose}")
         self.fk_link_name = fk_result.fk_link_names
         self.fk_error_code = fk_result.error_code
 
@@ -462,30 +471,37 @@ class Path_Plan_Execute():
         self.goal_joint_state = result.solution.joint_state
 
     async def plan_cartesian_path(self, queue):
-        cartesian_path_request = GetCartesianPath.Request()
+        self.cartesian_path_request = GetCartesianPath.Request()
 
-        cartesian_path_request.header = Header(
+        self.cartesian_path_request.header = Header(
             stamp=self.node.get_clock().now().to_msg())
-        cartesian_path_request.start_state = RobotState(
+        self.cartesian_path_request.start_state = RobotState(
             joint_state=JointState(
                 header=Header(stamp=self.node.get_clock().now().to_msg()),
                 name=self.current_joint_state.name,
                 position=self.current_joint_state.position,
                 velocity=self.current_joint_state.velocity,
-                effort=self.current_joint_state.effort))
-        cartesian_path_request.group_name = self.node.group_name
-        cartesian_path_request.waypoints = queue
-        cartesian_path_request.link_name = 'panda_hand'
-        # setting this to 0.1 for now, could cause problems later
-        cartesian_path_request.max_step = 0.1
-        # cartesian_path_request.jump_threshold = 0
-        # cartesian_path_request.prismatic_jump_threshold = 0
-        # cartesian_path_request.revolute_jump_threshold = 0
-        cartesian_path_request.avoid_collisions = True
-        cartesian_path_request.max_velocity_scaling_factor = 0.1
-        cartesian_path_request.max_acceleration_scaling_factor = 1.0
+                effort=self.current_joint_state.effort),
+            is_diff=False
+        )
 
-        cartesian_trajectory_result = await self.cartesian_path_client.call_async(cartesian_path_request)
+        self.cartesian_path_request.group_name = self.node.group_name
+        self.cartesian_path_request.waypoints = queue
+        self.cartesian_path_request.link_name = 'panda_hand'
+        # setting this to 0.1 for now, could cause problems later
+        self.cartesian_path_request.max_step = 0.1
+        # self.cartesian_path_request.jump_threshold = 0
+        # self.cartesian_path_request.prismatic_jump_threshold = 0
+        # self.cartesian_path_request.revolute_jump_threshold = 0
+        self.cartesian_path_request.avoid_collisions = True
+        self.cartesian_path_request.max_velocity_scaling_factor = 0.1
+        self.cartesian_path_request.max_acceleration_scaling_factor = 0.1
+        # self.node.get_logger().info(f"request: {self.cartesian_path_request}")
+
+        cartesian_trajectory_result = await self.cartesian_path_client.call_async(self.cartesian_path_request)
+
+        self.node.get_logger().info(
+            f"result: {cartesian_trajectory_result}")
         self.cartesian_trajectory_start_state = cartesian_trajectory_result.start_state
         # this is the trajectory we will execute
         self.cartesian_trajectory_solution = cartesian_trajectory_result.solution
@@ -592,7 +608,7 @@ class Path_Plan_Execute():
 
     def execute_individual_trajectories(self):
 
-        self.joint_trajectories.clear()
+        joint_trajectories = []
 
         for point in self.planned_trajectory.joint_trajectory.points:
             temp = JointTrajectoryPoint()
@@ -605,7 +621,9 @@ class Path_Plan_Execute():
             joint_trajectory.joint_names = self.planned_trajectory.joint_trajectory.joint_names
             joint_trajectory.points = [temp]
 
-            self.joint_trajectories.append(joint_trajectory)
+            joint_trajectories.append(joint_trajectory)
+
+        return joint_trajectories
 
     def execute_path(self):
         """

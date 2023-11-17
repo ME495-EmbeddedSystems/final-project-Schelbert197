@@ -4,7 +4,7 @@ from rclpy.duration import Duration
 
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Header
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 
 from joint_interfaces.msg import JointTrajectories
 
@@ -29,9 +29,16 @@ class Executor(Node):
         self.talk_to_draw = self.create_publisher(String, '/chatting', 10)
         self.sub = self.create_subscription(
             JointTrajectories, '/joint_trajectories', self.joint_trajectories_callback, 10)
+        self.force_sub = self.create_subscription(
+            Float32, '/ee_force', self.force_callback, 10)
         self.joint_trajectories = []
+        self.ee_force = 0
         self.state = None
         self.clear = False
+
+    def force_callback(self, msg):
+
+        self.ee_force = msg.data
 
     def joint_trajectories_callback(self, msg):
         self.get_logger().info("message received!")
@@ -48,20 +55,15 @@ class Executor(Node):
 
     def timer_callback(self):
 
+        if self.ee_force > 1:
+            self.joint_trajectories.clear()
+            self.clear = False
+
         if self.clear:
             self.joint_trajectories.clear()
             self.clear = False
-            self.state = State.STOP
 
         elif len(self.joint_trajectories) != 0 and self.state == State.PUBLISH:
-
-            # self.joint_trajectories[0].header = Header(
-            #     stamp=self.get_clock().now().to_msg())
-
-            # self.joint_trajectories[0].points[0].time_from_start.seconds = 0
-            # self.joint_trajectories[0].points[0].time_from_start.nanoseconds = 100000000
-
-            # JointTrajectoryPoint().time_from_start.
 
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
