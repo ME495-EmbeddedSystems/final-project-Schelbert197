@@ -31,84 +31,39 @@ class Ocr(Node):
 
             self.count = 1
             self.frame = None
+            self.guess_tracker = []
 
             self.timer = self.create_timer(1.0/self.param_ocr_frequency, self.ocr_timer)
+
         def ocr_timer(self):
-            # # Capture frame-by-frame
-            # # This method returns True/False as well
-            # # as the video frame.
-            # ret, frame = self.cap.read()
-
-            # if ret == True:
-            #     # Display image
-            #     cv2.imshow("camera", frame)
-            #     cv2.waitKey(1)  
-
-
-            #     if cv2.waitKey(1) & 0xFF == ord('c'):
-            #         # while valid == False:
-            #         #     result = self.ocr.ocr(frame, det=False, cls=False)
-            #         #     if len(result[0][0][0]) == 1 or len(result[0][0][0]) == 6:
-            #         #         valid = True
-            #         #     else
-            #         result = self.ocr.ocr(frame, det=False, cls=False)
-            #         if len(result[0][0][0]) == 1 or len(result[0][0][0]) == 6:
-            #             if result[0][0][1] > 0.75:
-            #                 print(result)
-            #         # for idx in range(len(result)):
-            #         #     res = result[idx]
-            #         #     for line in res:
-            #         #         print(line)          
-            #     else:
-            #         cv2.waitKey(1)  
-            # # Display the message on the console
-            # # self.get_logger().info('Publishing video frame')
-
-            # if  self.count%10 == 0:
-            #     result = self.ocr.ocr(self.frame, cls=False)
-            #     if result[0] != None:
-            #         self.guess_verification(result)
-            #     print(result)
-
-            # if self.count%100 == 0:
-            #     self.ocr_func(self.frame)
-
-            # self.count += 1
-
             self.ocr_func(self.frame)
 
         def ocr_func(self, frame):
-            # try:
-            #     result = self.ocr.ocr(frame, cls=False)
-            #     if result[0] != None:
-            #         self.guess_verification(result)
-            #     # print(result)
-            #     # self.get_logger().info(f"Result: {result}")
-            # except:
-            #     pass
             result = self.ocr.ocr(frame, cls=False)
             if result[0] != None:
                 self.guess_verification(result)
-            # print(result)
+                # print(result)
             # self.get_logger().info(f"Result: {result}")
 
         def guess_verification(self, result):
             if len(result[0][0][1][0]) == 1 or len(result[0][0][1][0]) == 6:
-                self.get_logger().info(f"Registering Guess: {result[0][0][1][0]}")
+                if result[0][0][1][1] > 0.95:
+                    self.guess_tracking(result[0][0][1][0])
+                    # self.get_logger().info(f"Registering Guess: {result[0][0][1][0]}")
+
+        def guess_tracking(self, guess):
+            self.guess_tracker.append(guess)
+            if len(self.guess_tracker) > 3:
+                del self.guess_tracker[0]
+            if len(self.guess_tracker) == 3:
+                if self.guess_tracker[0] == self.guess_tracker[1] and self.guess_tracker[1] == self.guess_tracker[2]:
+                    self.get_logger().info(f"Registering Guess: {guess}")
+                    self.guess_tracker = []
 
         def image_modification(self, msg):
             self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
             cv2.imshow("image", self.frame)
             cv2.waitKey(1)
-
-            # if  self.count%100 == 0:
-            #     result = self.ocr.ocr(frame, cls=False)
-            #     if result[0] != None:
-            #         self.guess_verification(result)
-            #     print(result)
-           
-            # self.count += 1
-
 
 def main(args=None):
     rclpy.init(args=args)
