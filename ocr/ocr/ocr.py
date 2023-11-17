@@ -22,8 +22,10 @@ class Ocr(Node):
             self.cap = self.create_subscription(Image, "camera/color/image_raw", self.image_modification, qos_profile=10)
             self.cv_bridge = CvBridge()
             self.count = 1
+            self.frame = None
+            
 
-            # self.timer = self.create_timer(1.0/100.0, self.timer_callback)
+            self.timer = self.create_timer(1.0/100.0, self.timer_callback)
         def timer_callback(self):
             # # Capture frame-by-frame
             # # This method returns True/False as well
@@ -54,7 +56,7 @@ class Ocr(Node):
             # # self.get_logger().info('Publishing video frame')
 
             if  self.count%10 == 0:
-                result = self.ocr.ocr(self.cap, cls=False)
+                result = self.ocr.ocr(self.frame, cls=False)
                 if result[0] != None:
                     self.guess_verification(result)
                 print(result)
@@ -66,19 +68,17 @@ class Ocr(Node):
                 self.get_logger().info(f"Registering Guess: {result[0][0][1][0]}")
 
         def image_modification(self, msg):
-            frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
-            resized_image = imutils.resize(frame, height=100)
-            cv2.imshow("image", frame)
+            self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
+            cv2.imshow("image", self.frame)
             cv2.waitKey(1)
 
-            if  self.count%100 == 0:
-                result = self.ocr.ocr(frame, cls=False)
-                if result[0] != None:
-                    self.guess_verification(result)
-                print(result)
+            # if  self.count%100 == 0:
+            #     result = self.ocr.ocr(frame, cls=False)
+            #     if result[0] != None:
+            #         self.guess_verification(result)
+            #     print(result)
            
-            self.count += 1
-            return frame
+            # self.count += 1
 
 
 def main(args=None):
