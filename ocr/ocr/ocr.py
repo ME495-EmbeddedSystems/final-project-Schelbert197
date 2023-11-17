@@ -28,6 +28,8 @@ class Ocr(Node):
         #declare and define parameters
         self.declare_parameter('ocr_frequency', 1)
         self.param_ocr_frequency = self.get_parameter('ocr_frequency').get_parameter_value().integer_value
+        self.declare_parameter('ocr_threshold', 0.85)
+        self.param_ocr_threshold = self.get_parameter('ocr_threshold').get_parameter_value().double_value
 
         self.count = 1
         self.frame = None
@@ -48,7 +50,7 @@ class Ocr(Node):
 
     def guess_verification(self, result):
         if len(result[0][0][1][0]) == 1 or len(result[0][0][1][0]) == 6:
-            if result[0][0][1][1] > 0.85:
+            if result[0][0][1][1] > self.param_ocr_threshold:
                 self.guess_tracking(result[0][0][1][0])
                 # self.get_logger().info(f"Registering Guess: {result[0][0][1][0]}")
 
