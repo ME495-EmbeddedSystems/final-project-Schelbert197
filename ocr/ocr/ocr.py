@@ -17,16 +17,23 @@ class Ocr(Node):
             super().__init__("ocr")
 
             self.ocr = PaddleOCR(lang='en', use_gpu= False) # need to run only once to download and load model into memory
+            
             self.guess_publish = self.create_publisher(String, "user_input", 10)
-            # self.cap = cv2.VideoCapture(0)
-            self.cap = self.create_subscription(Image, "camera/color/image_raw", self.image_modification, qos_profile=10)
             self.cv_bridge = CvBridge()
+            
+            # self.cap = cv2.VideoCapture(0)
+            
+            self.cap = self.create_subscription(Image, "camera/color/image_raw", self.image_modification, qos_profile=10)
+            
+            #declare and define parameters
+            self.declare_parameter('ocr_frequency', 1)
+            self.param_ocr_frequency = self.get_parameter('ocr_frequency').get_parameter_value().integer_value
+
             self.count = 1
             self.frame = None
-            
 
-            self.timer = self.create_timer(1.0/100.0, self.timer_callback)
-        def timer_callback(self):
+            self.timer = self.create_timer(1.0/self.param_ocr_frequency, self.ocr_timer)
+        def ocr_timer(self):
             # # Capture frame-by-frame
             # # This method returns True/False as well
             # # as the video frame.
@@ -63,18 +70,27 @@ class Ocr(Node):
             #         self.guess_verification(result)
             #     print(result)
 
-            if self.count%10 == 0:
-                self.ocr_func(self.frame)
+            # if self.count%100 == 0:
+            #     self.ocr_func(self.frame)
 
-            self.count += 1
-        
+            # self.count += 1
+
+            self.ocr_func(self.frame)
+
         def ocr_func(self, frame):
+            # try:
+            #     result = self.ocr.ocr(frame, cls=False)
+            #     if result[0] != None:
+            #         self.guess_verification(result)
+            #     # print(result)
+            #     # self.get_logger().info(f"Result: {result}")
+            # except:
+            #     pass
             result = self.ocr.ocr(frame, cls=False)
             if result[0] != None:
                 self.guess_verification(result)
             # print(result)
-            self.get_logger().info(f"Result: {result}")
-
+            # self.get_logger().info(f"Result: {result}")
 
         def guess_verification(self, result):
             if len(result[0][0][1][0]) == 1 or len(result[0][0][1][0]) == 6:
