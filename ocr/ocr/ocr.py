@@ -35,6 +35,8 @@ class Ocr(Node):
             # if ret == True:
             #     # Display image
             #     cv2.imshow("camera", frame)
+            #     cv2.waitKey(1)  
+
 
             #     if cv2.waitKey(1) & 0xFF == ord('c'):
             #         # while valid == False:
@@ -55,14 +57,25 @@ class Ocr(Node):
             # # Display the message on the console
             # # self.get_logger().info('Publishing video frame')
 
-            if  self.count%10 == 0:
-                result = self.ocr.ocr(self.frame, cls=False)
-                if result[0] != None:
-                    self.guess_verification(result)
-                print(result)
-            
+            # if  self.count%10 == 0:
+            #     result = self.ocr.ocr(self.frame, cls=False)
+            #     if result[0] != None:
+            #         self.guess_verification(result)
+            #     print(result)
+
+            if self.count%10 == 0:
+                self.ocr_func(self.frame)
+
             self.count += 1
         
+        def ocr_func(self, frame):
+            result = self.ocr.ocr(frame, cls=False)
+            if result[0] != None:
+                self.guess_verification(result)
+            # print(result)
+            self.get_logger().info(f"Result: {result}")
+
+
         def guess_verification(self, result):
             if len(result[0][0][1][0]) == 1 or len(result[0][0][1][0]) == 6:
                 self.get_logger().info(f"Registering Guess: {result[0][0][1][0]}")
