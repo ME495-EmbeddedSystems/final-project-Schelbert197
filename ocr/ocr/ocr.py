@@ -5,9 +5,6 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 from paddleocr import PaddleOCR
-import imutils
-from imutils.perspective import four_point_transform
-from imutils import contours
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
@@ -51,7 +48,6 @@ class Ocr(Node):
         if result[0] != None:
             self.guess_verification(result)
         print(result)
-        # self.get_logger().info(f"Result: {result}")
 
     def guess_verification(self, result):
         """Confirm whether the guess is a single letter or 6L word"""
@@ -59,8 +55,6 @@ class Ocr(Node):
             # check if the guess is a single letter according to instructions
             if result[0][0][1][0][-2] == ':' and result[0][0][1][0][-1].isalpha(): # check for single characters
                 if result[0][0][1][1] > self.param_ocr_threshold: # check confidence
-                    # Use the split() method to split the string into 
-                    # letter = result[0][0][1][0].split(':')
                     print(result[0][0][1][0][-1])
                     self.guess_tracking(result[0][0][1][0][-1])
             elif result[0][0][1][0][-2] == ':' and result[0][0][1][0][-1] == '0': # catch exception for "O"
