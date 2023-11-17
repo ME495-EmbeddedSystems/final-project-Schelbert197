@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "ocr = ocr.ocr:main"
+            "ocr = ocr.ocr:main",
+            "hangman = ocr.hangman:main"
         ],
     },
 )
