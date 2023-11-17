@@ -1,10 +1,11 @@
 from enum import Enum, auto
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import String, Float64MultiArray
 from matplotlib.textpath import TextToPath
 from matplotlib.font_manager import FontProperties
-
+import urllib.request
+from random import randint
 
 class State(Enum):
     """Create the states of the node to determine what the timer
@@ -36,7 +37,11 @@ class Hangman(Node):
         # Create Subscribers
         self.input = self.create_subscription(String, "/user_input", self.user_input_callback, qos_profile=10)
 
+        # Create Publisher
+        self.writer = self.create_publisher(Float64MultiArray, "/writer", qos_profile=10, callback_group=None)
+
         self.create_letters()
+        self.pick_words()
 
     def create_letters(self):
         """Create the dictionary of bubble letters"""
@@ -56,6 +61,20 @@ class Hangman(Node):
                     ylist.append(verts[j][1])
             point_dict = {letter: {'xlist': xlist,'ylist':ylist}}
             self.Alphabet.update(point_dict)
+
+    def pick_words(self):
+        """Randomly chooses a 6 letter word"""
+
+        word_url = "https://www.mit.edu/~ecprice/wordlist.10000"
+        response = urllib.request.urlopen(word_url)
+        long_txt = response.read().decode()
+        words = long_txt.splitlines()
+        word_list = []
+        for i in range(0,len(words)):
+            if len(words[i]) == 6:
+                word_list.append(words[i])
+
+        self.word = word_list[randint(0,len(word_list))].upper()
 
     def evaulate_guess(self, guess):
         """Evaluates the guess from the user"""
@@ -96,20 +115,25 @@ class Hangman(Node):
         self.get_logger().info(f"Wrong guesses: {self.current_wrong_guesses}")
         self.draw_man()
 
+    def send_letter(self, letter):
+        """Publishes the list of points that define the letter to the ros topic for the franka to read"""
+        array = [self.Alphabet[letter]['xlist'],self.Alphabet[letter]['ylist']]
+        self.writer.publish(array)
+
     def draw_man(self):
         """lil fella"""
         match self.current_wrong_guesses:
 
             case 1:
-                self.get_logger().info("O")
+                self.get_logger().info("O \n------")
             case 2:
-                self.get_logger().info("O-")
+                self.get_logger().info("O- \n------")
             case 3:
-                self.get_logger().info("O-|")
+                self.get_logger().info("O-| \n------")
             case 4:
-                self.get_logger().info("O-|-")
+                self.get_logger().info("O-|- \n------")
             case 5:
-                self.get_logger().info("O-|-<  you died")
+                self.get_logger().info("O-|-<  you died \n------")
 
     def check_word(self):
         """Checks the guessed word"""
@@ -155,7 +179,7 @@ class Hangman(Node):
                     self.show_progress()
                     self.state = State.GAME_OVER
             else:
-                self.get_logger().info("Game lost, try again later.")
+                self.get_logger().info(f"Game lost, try again later. Your word was {self.word}")
                 self.show_progress()
                 self.state = State.GAME_OVER
 
