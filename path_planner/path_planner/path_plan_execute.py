@@ -39,6 +39,8 @@ from moveit_msgs.srv import GetPositionIK
 from moveit_msgs.srv import GetPositionFK
 from rclpy.callback_groups import ReentrantCallbackGroup
 
+from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
+
 from franka_msgs.action import Homing, Grasp
 
 import modern_robotics as mr
@@ -131,7 +133,7 @@ class Path_Plan_Execute():
         self.L4 = 0.088
         self.L5 = 0.1070
 
-        self.robot_trajectories = []
+        self.joint_trajectories = []
 
         self.mass_matrix = np.array([[0.502922, -0.00659085, 0.476807, -0.00202931, 0.0526733, -0.000254634, -0.00282315],
                                      [-0.00659085, 0.476807, -0.00202931, 0.0526733, -
@@ -340,6 +342,9 @@ class Path_Plan_Execute():
     def joint_states_callback(self, msg):
         """Receive the message from the joint state subscriber."""
         self.current_joint_state = msg
+
+        # self.node.get_logger().info(
+        #     f"current_joint_state: {self.current_joint_state}")
         # self.node.get_logger().info(
         #     f"ee_force x_dir = {self.current_joint_state.effort[5] / (0.1070 + 0.1130)}")
         # self.node.get_logger().info(
@@ -587,16 +592,22 @@ class Path_Plan_Execute():
 
     def execute_individual_trajectories(self):
 
+        self.joint_trajectories.clear()
+
         for point in self.planned_trajectory.joint_trajectory.points:
-            robot_trajectory = RobotTrajectory()
-            # robot_trajectory.joint_trajectory.header = Header(
-            #     stamp=self.node.get_clock().now().to_msg())
-            robot_trajectory.joint_trajectory.joint_names = self.planned_trajectory.joint_trajectory.joint_names
-            robot_trajectory.joint_trajectory.points = [point]
+            temp = JointTrajectoryPoint()
+            temp.positions = point.positions
+            temp.velocities = point.velocities
+            temp.accelerations = point.accelerations
+            temp.effort = point.effort
+            temp.time_from_start.nanosec = 100000000
+            joint_trajectory = JointTrajectory()
+            joint_trajectory.joint_names = self.planned_trajectory.joint_trajectory.joint_names
+            joint_trajectory.points = [temp]
 
-            self.robot_trajectories.append(robot_trajectory)
+            self.joint_trajectories.append(joint_trajectory)
 
-    def execute_path(self, trajectory):
+    def execute_path(self):
         """
         Execute a previously planned path.
 
@@ -612,10 +623,7 @@ class Path_Plan_Execute():
         # self.executetrajectory_result = None
 
         executetrajectory_goal_msg = ExecuteTrajectory.Goal()
-        executetrajectory_goal_msg.trajectory = trajectory
-        self.node.get_logger().info(
-            f"current state: {self.current_joint_state}")
-        self.node.get_logger().info(f"trajectory: {trajectory}")
+        executetrajectory_goal_msg.trajectory = self.planned_trajectory
         self.send_goal_future = (
             self.executetrajectory_client.send_goal_async(
                 executetrajectory_goal_msg,
