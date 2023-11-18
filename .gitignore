@@ -1,0 +1,3 @@
+*.pyc
+.vscode/**
+ocr/ocr/cv_tuning.py
