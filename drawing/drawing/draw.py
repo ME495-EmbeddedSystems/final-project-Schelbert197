@@ -192,7 +192,7 @@ class Drawing(Node):
         for point in alphabet[letter]:
             pose = Pose()
             pose.position = Point(
-                x=self.current_pos.x, y=self.current_pos.y + point[0] * self.font_size, z=self.current_pos.z + point[1] * self.font_size)
+                x=self.current_pos[0], y=self.current_pos[1] + point[0] * self.font_size, z=self.current_pos[2] + point[1] * self.font_size)
             pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
             self.letter_queue.append(pose)
 

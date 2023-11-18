@@ -261,7 +261,7 @@ class Path_Plan_Execute():
             stamp=self.node.get_clock().now().to_msg(), frame_id=self.node.frame_id)
         orientation_constraint.orientation = Quaternion(
             x=0.0, y=1.0, z=0.0, w=0.0)
-        orientation_constraint.link_name = 'panda_hand'
+        orientation_constraint.link_name = 'panda_hand_tcp'
         orientation_constraint.absolute_x_axis_tolerance = 0.1
         orientation_constraint.absolute_y_axis_tolerance = 0.1
         orientation_constraint.absolute_z_axis_tolerance = 0.1
@@ -439,7 +439,7 @@ class Path_Plan_Execute():
 
         position.group_name = self.node.group_name
         position.avoid_collisions = True
-        position.ik_link_name = 'panda_hand'
+        position.ik_link_name = 'panda_hand_tcp'
         position.robot_state.joint_state.header = header
         position.robot_state.joint_state = joint_state
 
@@ -487,7 +487,7 @@ class Path_Plan_Execute():
 
         self.cartesian_path_request.group_name = self.node.group_name
         self.cartesian_path_request.waypoints = queue
-        self.cartesian_path_request.link_name = 'panda_hand'
+        self.cartesian_path_request.link_name = 'panda_hand_tcp'
         # setting this to 0.1 for now, could cause problems later
         self.cartesian_path_request.max_step = 0.1
         # self.cartesian_path_request.jump_threshold = 0
