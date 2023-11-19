@@ -5,6 +5,7 @@ from std_msgs.msg import String, Float64MultiArray
 from matplotlib.textpath import TextToPath
 from matplotlib.font_manager import FontProperties
 import urllib.request
+from gameplay_interfaces.msg import LetterMsg
 from random import randint
 
 class State(Enum):
@@ -92,10 +93,12 @@ class Hangman(Node):
         elif len(guess) == 1 and upper_guess not in self.guessed_letters:
             if upper_guess in self.word:
                 self.get_logger().info('letter in word')
+                pos = []
                 for i in range(len(self.word)):
                     if upper_guess == self.word[i]:
                         self.word_status[i] = upper_guess
-                # self.check_word()
+                        pos.append(i)
+                self.send_letter(upper_guess,pos)
             else:
                 self.get_logger().info('wrong guess')
                 self.guessed_letters.append(upper_guess)
@@ -115,10 +118,13 @@ class Hangman(Node):
         self.get_logger().info(f"Wrong guesses: {self.current_wrong_guesses}")
         self.draw_man()
 
-    def send_letter(self, letter):
+    def send_letter(self, letter, positions):
         """Publishes the list of points that define the letter to the ros topic for the franka to read"""
-        array = [self.Alphabet[letter]['xlist'],self.Alphabet[letter]['ylist']]
-        self.writer.publish(array)
+        letter_to_send = LetterMsg()
+        letter_to_send.positions = positions
+        letter_to_send.xpoints = self.Alphabet[letter]['xlist']
+        letter_to_send.ypoints = self.Alphabet[letter]['ylist']
+        self.writer.publish(letter_to_send)
 
     def draw_man(self):
         """lil fella"""

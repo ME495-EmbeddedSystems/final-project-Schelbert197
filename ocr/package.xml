@@ -7,6 +7,9 @@
   <maintainer email="241abhishek@gmail.com">abhi2001</maintainer>
   <license>Apache License 2.0</license>
 
+  <exec_depend>ros2launch</exec_depend>
+  <exec_depend>gameplay_interfaces</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
