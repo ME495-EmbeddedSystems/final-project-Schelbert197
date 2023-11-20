@@ -11,13 +11,11 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 find_package(trajectory_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/JointTrajectories.msg"
-  "msg/Poses.msg"
-  DEPENDENCIES trajectory_msgs geometry_msgs
+  DEPENDENCIES trajectory_msgs
 )
 
 if(BUILD_TESTING)

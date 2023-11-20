@@ -177,12 +177,11 @@ class Path_Plan_Execute():
             reference_trajectories=[],
             pipeline_id='move_group',
             planner_id='',
-            group_name=self.node.group_name,
+            group_name='panda_manipulator',
             num_planning_attempts=10,
             allowed_planning_time=5.0,
-            max_velocity_scaling_factor=0.1,
+            max_velocity_scaling_factor=0.3,
             max_acceleration_scaling_factor=0.1,
-            cartesian_speed_end_effector_link='',
             max_cartesian_speed=0.0)
         movegroup_goal_msg.request.workspace_parameters = (
             WorkspaceParameters(
@@ -211,18 +210,10 @@ class Path_Plan_Execute():
                               frame_id=self.node.frame_id),
                 name=self.current_joint_state.name,
                 position=self.current_joint_state.position,
-                velocity=[],
-                effort=[],
-            ),
-            multi_dof_joint_state=MultiDOFJointState(header=Header(
-                stamp=self.node.get_clock().now().to_msg(),
-                frame_id=self.node.frame_id),
-                joint_names=[],
-                transforms=[],
-                twist=[],
-                wrench=[]),
-            attached_collision_objects=[],
-            is_diff=False)
+                velocity=self.current_joint_state.velocity,
+                effort=self.current_joint_state.effort
+            )
+        )
 
         return movegroup_goal_msg
 
@@ -258,24 +249,24 @@ class Path_Plan_Execute():
 
         orientation_constraint = OrientationConstraint()
         orientation_constraint.header = Header(
-            stamp=self.node.get_clock().now().to_msg(), frame_id=self.node.frame_id)
+            stamp=self.node.get_clock().now().to_msg())
         orientation_constraint.orientation = Quaternion(
-            x=0.0, y=1.0, z=0.0, w=0.0)
+            x=1.0, y=0.0, z=0.0, w=0.0)
         orientation_constraint.link_name = 'panda_hand_tcp'
         orientation_constraint.absolute_x_axis_tolerance = 0.1
         orientation_constraint.absolute_y_axis_tolerance = 0.1
         orientation_constraint.absolute_z_axis_tolerance = 0.1
         orientation_constraint.weight = 1.0
 
-        movegroup_goal_msg.request.path_constraints = Constraints(
+        constraints = Constraints()
+        constraints.orientation_constraints = [orientation_constraint]
+
+        # movegroup_goal_msg.request.path_constraints = constraints
+
+        movegroup_goal_msg.request.trajectory_constraints.constraints = [Constraints(
             name='',
-            joint_constraints=[],
-            position_constraints=[],
-            orientation_constraints=[],
-            visibility_constraints=[])
-        movegroup_goal_msg.request.trajectory_constraints = (
-            TrajectoryConstraints(constraints=[])
-        )
+            orientation_constraints=[orientation_constraint]
+        )]
 
         return movegroup_goal_msg
 
@@ -293,58 +284,16 @@ class Path_Plan_Execute():
         """
         movegroup_goal_msg.planning_options = PlanningOptions(
             planning_scene_diff=PlanningScene(
-                name='hello',
                 robot_state=RobotState(
                     joint_state=JointState(header=Header(
-                        stamp=self.node.get_clock().now().to_msg(),
-                        frame_id=self.node.frame_id),
-                        name=[],
-                        position=[],
-                        velocity=[],
-                        effort=[]),
-                    multi_dof_joint_state=MultiDOFJointState(header=Header(
-                        stamp=self.node.get_clock().now().to_msg(),
-                        frame_id=self.node.frame_id),
-                        joint_names=[],
-                        transforms=[],
-                        twist=[],
-                        wrench=[]),
-                    attached_collision_objects=[],
+                        stamp=self.node.get_clock().now().to_msg())),
                     is_diff=True),
-                robot_model_name=self.node.robot_name,
-                fixed_frame_transforms=[],
-                allowed_collision_matrix=AllowedCollisionMatrix(
-                    entry_names=[],
-                    entry_values=[],
-                    default_entry_names=[],
-                    default_entry_values=[]),
-                link_padding=[],
-                link_scale=[],
-                object_colors=[],
-                world=PlanningSceneWorld(
-                    collision_objects=[],
-                    octomap=OctomapWithPose(
-                        header=Header(
-                            stamp=self.node.get_clock().now().to_msg(),
-                            frame_id=self.node.frame_id),
-                        origin=Pose(position=Point(x=0.0, y=0.0, z=0.0),
-                                    orientation=Quaternion(
-                                        x=0.0, y=0.0, z=0.0, w=1.0)),
-                        octomap=Octomap(header=Header(
-                            stamp=self.node.get_clock().now().to_msg(),
-                            frame_id=self.node.frame_id),
-                            binary=False,
-                            id='',
-                            resolution=0.0,
-                            data=[])),
-                    is_diff=True),
-                plan_only=True,
-                look_around=False,
-                look_around_attempts=0,
-                max_safe_execution_cost=0.0,
-                replan=False,
-                replan_attempts=0,
-                replan_delay=0.0))
+                robot_model_name=self.node.robot_name),
+            plan_only=True,
+            look_around=False,
+            look_around_attempts=0,
+            max_safe_execution_cost=0.0,
+            replan=False)
 
         return movegroup_goal_msg
 
@@ -352,37 +301,9 @@ class Path_Plan_Execute():
         """Receive the message from the joint state subscriber."""
         self.current_joint_state = msg
 
-        # self.node.get_logger().info(
-        #     f"current_joint_state: {self.current_joint_state}")
-        # self.node.get_logger().info(
-        #     f"ee_force x_dir = {self.current_joint_state.effort[5] / (0.1070 + 0.1130)}")
-        # self.node.get_logger().info(
-        #     f"7: {self.current_joint_state.effort[5]}\n\n")
-
-        # self.node.get_logger().info(
-        #     f"1: {self.current_joint_state.effort[0]}\n")
-        # self.node.get_logger().info(
-        #     f"2: {self.current_joint_state.effort[1]}\n")
-        # self.node.get_logger().info(
-        #     f"3: {self.current_joint_state.effort[2]}\n")
-        # self.node.get_logger().info(
-        #     f"4: {self.current_joint_state.effort[3]}\n")
-        # self.node.get_logger().info(
-        #     f"5: {self.current_joint_state.effort[4]}\n")
-        # self.node.get_logger().info(
-        #     f"6: {self.current_joint_state.effort[5]}\n")
-        # self.node.get_logger().info(
-        #     f"7: {self.current_joint_state.effort[6]}\n\n")
-        # self.node.get_logger().info(
-        #     f"panda_joint8: {self.current_joint_state.position[7]}\n")
-        # self.node.get_logger().info(
-        #     f"panda_joint9: {self.current_joint_state.position[8]}\n\n")
-
     def calc_EE_force(self):
         thetalist = np.asarray(self.current_joint_state.position[:7])
         taulist = np.asarray(self.current_joint_state.effort[:7])
-        # self.node.get_logger().info(f"{self.current_joint_state.effort}")
-        # self.node.get_logger().info(f"{thetalist}")
 
         Slist = np.array([[0, 0, 0, 0, 0, 0, 0], [0, 1, 0, -1, 0, -1, 0], [1, 0, 1, 0, 1, 0, -1],
                          [0, -self.L1, 0, self.L1+self.L2, 0, self.L1+self.L2+self.L3, 0], [0, 0, 0, 0, 0, 0, self.L4], [0, 0, 0, -self.L4, 0, 0, 0]])
@@ -392,30 +313,6 @@ class Path_Plan_Execute():
         Ftip = np.linalg.pinv(Jb.T) @ taulist
 
         return Ftip
-
-    async def fk_callback(self):
-        # self.node.get_logger().info(
-        #     f"current_joint_state: {self.current_joint_state}")
-        request = GetPositionFK.Request()
-        request.header = Header(
-            stamp=self.node.get_clock().now().to_msg()
-        )
-        request.fk_link_names = ['panda_link0', 'panda_link1', 'panda_link2', 'panda_link3',
-                                 'panda_link4', 'panda_link5', 'panda_link6', 'panda_link7', 'panda_hand_tcp']
-        request.robot_state = RobotState(
-            joint_state=JointState(
-                header=Header(stamp=self.node.get_clock().now().to_msg()),
-                name=self.current_joint_state.name,
-                position=self.current_joint_state.position,
-                # velocity=self.current_joint_state.velocity,
-                # effort=self.current_joint_state.effort
-            ))
-
-        fk_result = await self.fk_client.call_async(request)
-        self.fk_pose = fk_result.pose_stamped
-        # self.node.get_logger().info(f"fk_pose[]: {self.fk_pose}")
-        self.fk_link_name = fk_result.fk_link_names
-        self.fk_error_code = fk_result.error_code
 
     async def ik_callback(self, pose, joint_state):
         """
@@ -444,8 +341,6 @@ class Path_Plan_Execute():
         position.robot_state.joint_state = joint_state
 
         position.pose_stamped.header = header
-        # position.pose_stamped.pose.position = self.goal_pose
-        # position.pose_stamped.pose.orientation = self.goal_orientation
         position.pose_stamped.pose = pose
         position.timeout.sec = 5
 
@@ -485,6 +380,8 @@ class Path_Plan_Execute():
             is_diff=False
         )
 
+        # leave the commented out lines below here for now
+        # they may come in handy later as we continue to debug
         self.cartesian_path_request.group_name = self.node.group_name
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
@@ -500,8 +397,8 @@ class Path_Plan_Execute():
 
         cartesian_trajectory_result = await self.cartesian_path_client.call_async(self.cartesian_path_request)
 
-        self.node.get_logger().info(
-            f"result: {cartesian_trajectory_result}")
+        # self.node.get_logger().info(
+        #     f"result: {cartesian_trajectory_result}")
         self.cartesian_trajectory_start_state = cartesian_trajectory_result.start_state
         # this is the trajectory we will execute
         self.cartesian_trajectory_solution = cartesian_trajectory_result.solution
@@ -542,11 +439,6 @@ class Path_Plan_Execute():
             movegroup_goal_msg = self.set_planning_options(movegroup_goal_msg)
             movegroup_goal_msg = self.set_goal_constraints(movegroup_goal_msg)
 
-            movegroup_goal_msg.planning_options.plan_only = True
-
-            # self.node.get_logger().info(
-            #     f"movegroup_goal_msg: {movegroup_goal_msg}")
-
             self.send_goal_future = self.movegroup_client.send_goal_async(
                 movegroup_goal_msg,
                 feedback_callback=self.feedback_callback)
@@ -562,7 +454,7 @@ class Path_Plan_Execute():
         Provide a future result on the callback for async planning,
         executing, and planning and executing.
 
-        Args:f
+        Args:
         ----
         future (result) : the future object from the send_goal_future
         function
@@ -598,13 +490,9 @@ class Path_Plan_Execute():
         self.node.get_logger().info(
             f"movegroup_result: {self.movegroup_status}")
 
-        # append the calculated trajectory to our global variable
-        # for excuting later
         self.planned_trajectory = self.movegroup_result.planned_trajectory
-        # self.node.get_logger().info(
-        # f"planned_trajectory: {self.planned_trajectory}")
 
-        self.node.get_logger().info("executetrajectory goal msg set!")
+        self.node.get_logger().info("Trajectory Planned!")
 
     def execute_individual_trajectories(self):
 
@@ -637,9 +525,6 @@ class Path_Plan_Execute():
         None
 
         """
-        # self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
-        # self.executetrajectory_result = None
-
         executetrajectory_goal_msg = ExecuteTrajectory.Goal()
         executetrajectory_goal_msg.trajectory = self.planned_trajectory
         self.send_goal_future = (
@@ -695,154 +580,6 @@ class Path_Plan_Execute():
         self.node.get_logger().info(
             f'Result Error Code: {self.executetrajectory_result.error_code}')
 
-    async def plan_and_execute_path(self):
-        """
-        Plan and execute a path to the goal.
-
-        Plan and execute a path to a goal position and orientation
-        asynchronously by calling the movegroup_client and seeking a response
-        to indicate completion.
-
-        Args:
-        ----
-        request (int) : a dummy callback variable
-        response (int) : a dummy response variable
-
-        """
-        self.update_current_jointstate()
-        self.set_planning_options()
-        await self.get_goal_joint_states()
-        if len(self.goal_joint_state.position) > 0:
-            self.set_goal_constraints()
-
-            self.movegroup_goal_msg.planning_options.plan_only = False
-            self.send_goal_future = self.movegroup_client.send_goal_async(
-                self.movegroup_goal_msg,
-                feedback_callback=self.feedback_callback)
-            self.send_goal_future.add_done_callback(
-                self.movegroup_goal_response_callback)
-
-        else:
-            self.node.get_logger().error("Given pos is invalid")
-
-    def cancel_execution(self):
-        self.node.get_logger().info(f"help")
-        self.cancel_execution_future = self.executetrajectory_goal_handle.cancel()
-        self.cancel_execution_future.add_done_callback(
-            self.cancel_execution_callback)
-
-    def cancel_execution_callback(self, future):
-        self.cancel_goal_handle = future.result()
-        # self.cancel_goal_handle_status = self.cancel_goal_handle.status
-        if not self.cancel_goal_handle.accepted:
-            self.node.get_logger().info('Cancel Goal Rejected :P')
-            return
-
-        self.get_result_future = self.cancel_goal_handle.get_result_async()
-        self.get_result_future.add_done_callback(
-            self.get_cancel_result_callback)
-
-    def get_cancel_result_callback(self, future):
-        self.cancel_result = future.result().result
-        self.cancel_status = future.result().status
-
-        self.node.get_logger().info(
-            f"cancel_status: {self.cancel_status}")
-
-        self.node.get_logger().info("Current trajectory canceled")
-
-    async def CloseGripper(self):
-        """
-        Create a gripper action call.
-
-        Create the message type for the gripper action call and sends the
-        goal async.
-
-        Args:
-        ----
-        None
-
-        """
-        print("entering close gripper function")
-        goal_msg = Grasp.Goal()
-        goal_msg.width = 0.005
-        goal_msg.speed = 0.05
-        # goal_msg.force = 20.0
-        self.send_goal_future = (
-            self.node.gripper_grasping_client.send_goal_async(goal_msg)
-        )
-        self.send_goal_future.add_done_callback(self.goal_response_callback)
-
-    async def OpenGripper(self):
-        """
-        Create a gripper action call.
-
-        Create the message type for the gripper action call and sends the
-        goal async.
-
-        Args:
-        ----
-        None
-
-        """
-        print("entering close gripper function")
-        goal_msg = Grasp.Goal()
-        goal_msg.width = 0.035
-        goal_msg.speed = 0.05
-        # goal_msg.force = 20.0
-        self.send_goal_future = (
-            self.node.gripper_grasping_client.send_goal_async(goal_msg)
-        )
-        self.send_goal_future.add_done_callback(self.goal_response_callback)
-
-    async def MoveGripper(self, goal_msg):
-        # goal_msg = Grasp.Goal()
-        # goal_msg.width = 0.0
-        # goal_msg.speed = 0.05
-
-        self.send_goal_future = (
-            self.node.gripper_grasping_client.send_goal_async(goal_msg)
-        )
-        self.send_goal_future.add_done_callbak(
-            self.gripper_goal_response_callback)
-
-    def gripper_goal_response_callback(self, future):
-        """
-        Provide a response for the goal callback.
-
-        Provide whether or not a goal was rejecetd to or not to the user,
-        and forward the result along for further processing.
-
-        Args:
-        ----
-        future : a future object.
-
-        """
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.node.get_logger().info('Goal rejected :(')
-            return
-
-        self.node.get_logger().info('Goal accepted :)')
-
-        self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.get_result_callback)
-
-    def get_gripper_result_callback(self, future):
-        """
-        Provide a future result.
-
-        Provide a future result on the action callback.
-
-        Args:
-        ----
-        future (result) : the future object from the async action
-        result call
-
-        """
-        self.gripper_result = future.result().result
-        self.gripper_status = future.result().status
-
     async def feedback_callback(self, feedback_msg):
         """
         Provide a future result message.
@@ -858,36 +595,3 @@ class Path_Plan_Execute():
         """
         feedback = feedback_msg.feedback
         self.node.get_logger().info(f"Received Feedback: {feedback}")
-
-    def add_box(self, box_id, frame_id, dimensions, pose):
-        """
-        Add a collision box to the rviz scene.
-
-        Add a box to the rviz scene representing the table that the robot
-        is grabbing objects off of.
-
-        Args:
-        ----
-        box_id (string) : the id of the box
-        frame_id (string) : the id of the box's frame
-        dimensions (list) : the lengths of the edges of the box
-        pose (list) : the cartesian coordinates of the box origin
-
-        """
-        collision_object = CollisionObject()
-        collision_object.header.frame_id = frame_id
-        collision_object.id = box_id
-
-        box_size = SolidPrimitive()
-        box_size.type = SolidPrimitive.BOX
-        box_size.dimensions = dimensions
-
-        box_pose = Pose()
-        box_pose.position.x = pose[0]  # x position
-        box_pose.position.y = pose[1]  # y position
-        box_pose.position.z = pose[2]  # z position
-
-        collision_object.primitives.append(box_size)
-        collision_object.primitive_poses.append(box_pose)
-
-        self.planning_scene_publisher.publish(collision_object)

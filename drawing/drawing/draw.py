@@ -34,15 +34,12 @@ class State(Enum):
 
     TOUCHING_BOARD = auto()
     WRITING_LETTERS = auto()
-
     CALIBRATE = auto()
-    FK = auto()
-
+    GET_TRANSFORM = auto()
     LOAD_MOVES = auto()
     STOP = auto()
     PLANNING = auto()
     EXECUTING = auto()
-    CANCELING = auto()
     WAITING = auto()
 
 
@@ -88,7 +85,7 @@ class Drawing(Node):
         self.timer_callback_group = MutuallyExclusiveCallbackGroup()
         self.chatting_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
-            0.05, self.timer_callback, callback_group=self.timer_callback_group)
+            0.01, self.timer_callback, callback_group=self.timer_callback_group)
 
         self.path_planner = Path_Plan_Execute(self)
 
@@ -185,7 +182,7 @@ class Drawing(Node):
         pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
         self.touch_board_queue.append(pose1)
-        self.touch_board_queue.append(pose2)
+        self.letter_queue.append(pose2)
 
     def queue_letter(self, letter):
 
@@ -195,6 +192,18 @@ class Drawing(Node):
                 x=self.current_pos[0], y=self.current_pos[1] + point[0] * self.font_size, z=self.current_pos[2] + point[1] * self.font_size)
             pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
             self.letter_queue.append(pose)
+
+        move_back = Pose()
+        move_back.position = Point(
+            x=self.current_pos[0]+0.05, y=self.current_pos[1], z=self.current_pos[2])
+        move_back.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+        self.letter_queue.append(move_back)
+
+        move_side = Pose()
+        move_side.position = Point(
+            x=self.current_pos[0]+0.05, y=self.current_pos[1] + 0.01, z=self.current_pos[2])
+        move_side.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+        self.letter_queue.append(move_side)
 
     def pick_callback(self, request, response):
         """
@@ -229,9 +238,9 @@ class Drawing(Node):
         None
 
         """
-        # check whether or not the marker is running into the board, maybe
-        self.get_logger().info(f"stage: {self.stage}")
-        self.get_logger().info(f"state: {self.state}\n")
+        # check whether or not the marker is running into the board, and sometimes, successfully.
+        # self.get_logger().info(f"stage: {self.stage}")
+        # self.get_logger().info(f"state: {self.state}\n")
 
         if self.stage == State.TOUCHING_BOARD:
             if self.state == State.CALIBRATE:
@@ -293,11 +302,11 @@ class Drawing(Node):
             elif len(self.touch_board_queue) == 0:
 
                 self.stage = State.WRITING_LETTERS
-                self.state = State.FK
+                self.state = State.GET_TRANSFORM
 
         elif self.stage == State.WRITING_LETTERS:
 
-            if self.state == State.FK:
+            if self.state == State.GET_TRANSFORM:
 
                 trans, rotation = self.get_transform(
                     'panda_link0', 'panda_hand_tcp')

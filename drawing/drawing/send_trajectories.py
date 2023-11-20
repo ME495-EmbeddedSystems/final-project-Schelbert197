@@ -55,7 +55,7 @@ class Executor(Node):
 
     def timer_callback(self):
 
-        if self.ee_force > 1:
+        if self.ee_force > 1.5:
             self.joint_trajectories.clear()
             self.clear = False
 
