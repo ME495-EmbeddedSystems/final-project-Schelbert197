@@ -182,7 +182,7 @@ class Drawing(Node):
         pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
         self.touch_board_queue.append(pose1)
-        self.letter_queue.append(pose2)
+        self.touch_board_queue.append(pose2)
 
     def queue_letter(self, letter):
 
