@@ -56,6 +56,7 @@ class Executor(Node):
 
     def timer_callback(self):
 
+        # if force is above threshold, stop executing.
         if self.ee_force > self.ee_force_threshold:
             self.joint_trajectories.clear()
             self.clear = False
@@ -64,11 +65,14 @@ class Executor(Node):
             self.joint_trajectories.clear()
             self.clear = False
 
+        # if list of waypoints is not empty, publish to the topic that executes
+        # trajectories oof the panda
         elif len(self.joint_trajectories) != 0 and self.state == State.PUBLISH:
 
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
 
+        # if we've reached the goal, send a message to draw.py that says we're done.
         elif len(self.joint_trajectories) == 0 and self.state == State.PUBLISH:
 
             msg = String()

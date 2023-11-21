@@ -8,27 +8,18 @@ from path_planner.path_plan_execute import Path_Plan_Execute
 from character_interfaces.alphabet import alphabet
 from joint_interfaces.msg import JointTrajectories
 
-from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
-from box_adder_interfaces.srv import Box
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
 
 from action_msgs.msg import GoalStatus
 
-from geometry_msgs.msg import TransformStamped
-
-from trajectory_msgs.msg import JointTrajectory
 from brain_interfaces.msg import Cartesian
-from std_msgs.msg import Header, String, Float32
-
-from moveit_msgs.srv import GetCartesianPath
+from std_msgs.msg import String, Float32
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-
-import numpy as np
-np.set_printoptions(suppress=True)
 
 
 class State(Enum):
@@ -43,7 +34,7 @@ class State(Enum):
     EXECUTING = auto()
     WAITING = auto()
 
-    PLAN_BIG_MOVE = auto()
+    PLAN_MOVEGROUP = auto()
     PLAN_CARTESIAN_MOVE = auto()
 
 
@@ -104,14 +95,14 @@ class Drawing(Node):
         # this subscriber is for the brain node to send singular poses for
         # this node to plan paths to using the moveit motion planner
         self.moveit_mp_sub = self.create_subscription(
-            Cartesian, '/moveit_mp', self.moveit_mp_callback, 10)
+            Pose, '/moveit_mp', self.moveit_mp_callback, 10)
 
         # this subscriber is for the brain node to send lists of poses
         # for this node to use to plan paths using the cartesian motion
         # planner. It also sends a Point() object, which contains the
         # start position of the letter to be planned
         self.cartesian_mp_sub = self.create_subscription(
-            Pose, '/cartesian_mp', self.cartesian_mp_callback, 10)
+            Cartesian, '/cartesian_mp', self.cartesian_mp_callback, 10)
 
         # this subscriber is used for communicating with the node we created
         # to execute our trajectories.
@@ -168,7 +159,7 @@ class Drawing(Node):
             trans, rotation = self.get_transform(
                 'panda_link0', 'panda_hand_tcp')
             self.letter_start_pos = Point(x=trans[0], y=trans[1], z=trans[2])
-            self.state = State.PLAN_BIG_MOVE
+            self.state = State.PLAN_MOVEGROUP
 
     def moveit_mp_callback(self, msg):
         self.moveit_mp_queue.append(msg)
@@ -253,39 +244,6 @@ class Drawing(Node):
             self.get_logger().info(f"Extrapolation exception: {e}")
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
-    def queue_touch_board_moves(self):
-        pose1 = Pose()
-        pose1.position = Point(x=-self.x_init, y=self.y_init, z=0.4)
-        pose1.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-
-        pose2 = Pose()
-        pose2.position = Point(x=-self.x_init - 0.3, y=self.y_init, z=0.4)
-        pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-
-        self.big_move_queue.append(pose1)
-        self.cartesian_move_queue.append(pose2)
-
-    def queue_letter(self, letter):
-
-        for point in alphabet[letter]:
-            pose = Pose()
-            pose.position = Point(
-                x=self.current_pos[0], y=self.current_pos[1] + point[0] * self.font_size, z=self.current_pos[2] + point[1] * self.font_size)
-            pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-            self.cartesian_move_queue.append(pose)
-
-        move_back = Pose()
-        move_back.position = Point(
-            x=self.current_pos[0]+0.05, y=self.current_pos[1], z=self.current_pos[2])
-        move_back.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-        self.cartesian_move_queue.append(move_back)
-
-        move_side = Pose()
-        move_side.position = Point(
-            x=self.current_pos[0]+0.05, y=self.current_pos[1] + 0.01, z=self.current_pos[2])
-        move_side.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-        self.cartesian_move_queue.append(move_side)
-
     async def timer_callback(self):
         """
         Timer loop for the drawing node.
@@ -316,7 +274,7 @@ class Drawing(Node):
             self.force_offset = self.force_offset/calibration_cycles
             self.state = State.WAITING
 
-        elif self.state == State.PLAN_BIG_MOVE:
+        elif self.state == State.PLAN_MOVEGROUP:
 
             # here we check to see if the big_move queue is empty, and if not,
             # we use the moveit motion planner to create a trajectory.
@@ -369,7 +327,7 @@ class Drawing(Node):
             # calculate the current force at the end-effector, and send it to the
             # node that is executing our trajectory. Also, check to see whether
             # the moveit motion planner has completed planning. This will only
-            # happen if the state prior was State.PLAN_BIG_MOVE.
+            # happen if the state prior was State.PLAN_MOVEGROUP.
 
             ee_force = self.path_planner.current_joint_state.effort[5] / (
                 self.L1 + self.L2) - self.force_offset

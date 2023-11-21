@@ -14,41 +14,25 @@ PARAMETERS:
 
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from std_msgs.msg import Header
 
-from moveit_msgs.action import MoveGroup, ExecuteTrajectory
-from moveit_msgs.msg import (JointConstraint, TrajectoryConstraints,
-                             Constraints, OrientationConstraint, PlanningScene, PlanningOptions,
-                             RobotState, AllowedCollisionMatrix,
-                             PlanningSceneWorld, MotionPlanRequest,
-                             WorkspaceParameters, PositionIKRequest, RobotTrajectory)
+from moveit_msgs.action import MoveGroup
+from moveit_msgs.msg import (JointConstraint, Constraints, OrientationConstraint,
+                             PlanningScene, PlanningOptions, RobotState,
+                             MotionPlanRequest, WorkspaceParameters, PositionIKRequest,
+                             CollisionObject)
+from moveit_msgs.srv import GetPositionIK, GetPositionFK, GetCartesianPath
 
-from moveit_msgs.msg import MoveItErrorCodes
-
-from geometry_msgs.msg import Vector3, Pose, Point, Quaternion
-from sensor_msgs.msg import JointState, MultiDOFJointState
-
-from moveit_msgs.msg import CollisionObject
-from shape_msgs.msg import SolidPrimitive
-
-from moveit_msgs.srv import GetCartesianPath
-
-from octomap_msgs.msg import OctomapWithPose, Octomap
-from moveit_msgs.srv import GetPositionIK
-from moveit_msgs.srv import GetPositionFK
-from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
-
+from geometry_msgs.msg import Vector3, Quaternion
+from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 
 from franka_msgs.action import Homing, Grasp
 
-import modern_robotics as mr
-import numpy as np
-
 
 class Path_Plan_Execute():
-    """Class defining brick state."""
 
     def __init__(self, node):
         """
@@ -65,32 +49,36 @@ class Path_Plan_Execute():
         """
         self.node = node
 
-        # getting current joint states
+        # create mutually exclusive callback groups
         self.joint_states_callback_group = MutuallyExclusiveCallbackGroup()
-        self.joint_states_subs = self.node.create_subscription(
-            JointState, '/joint_states', self.joint_states_callback, 10, callback_group=self.joint_states_callback_group)
-        self.current_joint_state = JointState()
         self.fk_callback_group = MutuallyExclusiveCallbackGroup()
         self.ik_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
         self.movegroup_callback_group = MutuallyExclusiveCallbackGroup()
         self.executetrajectory_callback_group = MutuallyExclusiveCallbackGroup()
 
+        ########### create subscribers ############
+
+        self.joint_states_subs = self.node.create_subscription(
+            JointState, '/joint_states', self.joint_states_callback, 10, callback_group=self.joint_states_callback_group)
+        self.current_joint_state = JointState()
+
+        ########### create action clients ###########
+
         self.movegroup_client = ActionClient(self.node, MoveGroup,
                                              'move_action', callback_group=self.movegroup_callback_group)
-
-        self.executetrajectory_client = ActionClient(
-            self.node, ExecuteTrajectory, 'execute_trajectory', callback_group=self.executetrajectory_callback_group)
         self.node.gripper_homing_client = ActionClient(
             self.node, Homing, 'panda_gripper/homing')
         self.node.gripper_grasping_client = ActionClient(
             self.node, Grasp, 'panda_gripper/grasp')
 
+        # check to see if the gripper is available
         self.gripper_available = True
         if not self.node.gripper_grasping_client.wait_for_server(
                 timeout_sec=2):
             self.gripper_available = False
 
+        ########## create service clients ###########
         self.fk_client = self.node.create_client(
             GetPositionFK, 'compute_fk', callback_group=self.fk_callback_group)
 
@@ -100,6 +88,7 @@ class Path_Plan_Execute():
         self.cartesian_path_client = self.node.create_client(
             GetCartesianPath, 'compute_cartesian_path', callback_group=self.cartesian_callback_group)
 
+        # wait for the clients' services to be available
         while not self.ik_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info(
                 'IK service not available, waiting again...')
@@ -110,69 +99,43 @@ class Path_Plan_Execute():
             self.node.get_logger().info(
                 'IK service not available, waiting again...')
 
-        # self.goal_pose = Point(x=0.0, y=0.0, z=0.0)
-        self.goal_pose = Pose()
-        self.goal_orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-        self.robot_state = RobotState()
-
         self.movegroup_goal_msg = MoveGroup.Goal()
         self.movegroup_result = None
         self.movegroup_status = GoalStatus.STATUS_UNKNOWN
-        self.executetrajectory_goal_msg = ExecuteTrajectory.Goal()
-        self.executetrajectory_result = None
-        self.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
-
-        self.gripper_status = GoalStatus.STATUS_UNKNOWN
-
-        self.cancel_status = None
-
-        self.goal_handle_status = None
-        self.grasp_action_result = False
 
         self.goal_joint_state = None
         self.planned_trajectory = None
 
-        self.cartesian_trajectory_error_code = MoveItErrorCodes()
-        self.cartesian_trajectory_error_code.val = 0
+        # i want to remove the commented lines below, but i'm not sure
+        # if it will break things. Leaving them here until I can confirm
+        # we don't need them
+        # self.cartesian_trajectory_error_code = MoveItErrorCodes()
+        # self.cartesian_trajectory_error_code.val = 0
 
-        self.fk_error_code = MoveItErrorCodes()
-        self.fk_error_code = 0
+        # self.fk_error_code = MoveItErrorCodes()
+        # self.fk_error_code = 0
 
-        self.L1 = 0.333
-        self.L2 = 0.3160
-        self.L3 = 0.3840
-        self.L4 = 0.088
-        self.L5 = 0.1070
-
-        self.mass_matrix = np.array([[0.502922, -0.00659085, 0.476807, -0.00202931, 0.0526733, -0.000254634, -0.00282315],
-                                     [-0.00659085, 0.476807, -0.00202931, 0.0526733, -
-                                         0.000254634, -0.00282315, -0.00659085],
-                                     [0.476807, -0.00202931, 0.0526733, -
-                                         0.000254634, -0.00282315, -0.00659085, 1.55193],
-                                     [-0.00202931, 0.0526733, -
-                                    0.000254634, -0.00282315, -0.00659085, 1.55193, -0.0227345],
-                                    [0.0526733, -0.000254634, -0.00282315, -
-                                        0.00659085, 1.55193, -0.0227345, -0.687864],
-                                    [-0.000254634, -0.00282315, -0.00659085,
-                                        1.55193, -0.0227345, -0.687864, -0.00779532],
-                                    [-0.00282315, -0.00659085, 1.55193, -0.0227345, -0.687864, -0.00779532, -0.0338294]])
-
+        # this is for the box. i know we want to keep the box in rviz
+        # for some reason, but i've already removed it. I'll just leave
+        # this function here for now so that in the future i dont' ahve to
+        # add it back anyway.
         self.planning_scene_publisher = self.node.create_publisher(
             CollisionObject,
             '/collision_object',
             10
         )
 
-    def set_initial_condition(self, movegroup_goal_msg):
-        """
-        Set the initial states of the joints for the JointState message.
+    def joint_states_callback(self, msg):
+        """Receive the message from the joint state subscriber."""
+        self.current_joint_state = msg
 
-        Args:
-        ----
-        None
+    def create_movegroup_msg(self, movegroup_goal_msg):
 
-        """
+        # we had previously split this all up into like four
+        # different functions.
+
         self.node.get_logger().info("Initial Set")
+        # set up the message
         movegroup_goal_msg.request = MotionPlanRequest(
             reference_trajectories=[],
             pipeline_id='move_group',
@@ -182,7 +145,10 @@ class Path_Plan_Execute():
             allowed_planning_time=5.0,
             max_velocity_scaling_factor=0.3,
             max_acceleration_scaling_factor=0.1,
-            max_cartesian_speed=0.0)
+            max_cartesian_speed=0.0
+        )
+
+        # set the workspace parameters
         movegroup_goal_msg.request.workspace_parameters = (
             WorkspaceParameters(
                 header=Header(stamp=self.node.get_clock().now().to_msg(),
@@ -191,19 +157,7 @@ class Path_Plan_Execute():
                 max_corner=Vector3(x=1.0, y=1.0, z=1.0))
         )
 
-        return movegroup_goal_msg
-
-    def update_current_jointstate(self, movegroup_goal_msg):
-        """
-        Set the current robot joint state.
-
-        Set the current states of the joints for the JointState message.
-
-        Args:
-        ----
-        None
-
-        """
+        # set the start state of the robot as a RobotState variable
         movegroup_goal_msg.request.start_state = RobotState(
             joint_state=JointState(
                 header=Header(stamp=self.node.get_clock().now().to_msg(),
@@ -215,19 +169,9 @@ class Path_Plan_Execute():
             )
         )
 
-        return movegroup_goal_msg
-
-    def set_goal_constraints(self, movegroup_goal_msg):
-        """
-        Set the goal position for a robot arm.
-
-        Set the goal constraints iteratively for the robot arm links.
-
-        Args:
-        ----
-        None
-
-        """
+        ######################################
+        ######### set the goal constraints#####
+        ######################################
         joint_constraints = []
 
         # dynamically create the goal constraints based on the size of the
@@ -261,27 +205,12 @@ class Path_Plan_Execute():
         constraints = Constraints()
         constraints.orientation_constraints = [orientation_constraint]
 
-        # movegroup_goal_msg.request.path_constraints = constraints
-
         movegroup_goal_msg.request.trajectory_constraints.constraints = [Constraints(
             name='',
             orientation_constraints=[orientation_constraint]
         )]
 
-        return movegroup_goal_msg
-
-    def set_planning_options(self, movegroup_goal_msg):
-        """
-        Define planning parameters.
-
-        Define the planning parameters required to use the movegroup node
-        including the empty variables..
-
-        Args:
-        ----
-        None
-
-        """
+        # set the planning options
         movegroup_goal_msg.planning_options = PlanningOptions(
             planning_scene_diff=PlanningScene(
                 robot_state=RobotState(
@@ -296,23 +225,6 @@ class Path_Plan_Execute():
             replan=False)
 
         return movegroup_goal_msg
-
-    def joint_states_callback(self, msg):
-        """Receive the message from the joint state subscriber."""
-        self.current_joint_state = msg
-
-    def calc_EE_force(self):
-        thetalist = np.asarray(self.current_joint_state.position[:7])
-        taulist = np.asarray(self.current_joint_state.effort[:7])
-
-        Slist = np.array([[0, 0, 0, 0, 0, 0, 0], [0, 1, 0, -1, 0, -1, 0], [1, 0, 1, 0, 1, 0, -1],
-                         [0, -self.L1, 0, self.L1+self.L2, 0, self.L1+self.L2+self.L3, 0], [0, 0, 0, 0, 0, 0, self.L4], [0, 0, 0, -self.L4, 0, 0, 0]])
-
-        Jb = mr.JacobianSpace(Slist, thetalist)
-
-        Ftip = np.linalg.pinv(Jb.T) @ taulist
-
-        return Ftip
 
     async def ik_callback(self, pose, joint_state):
         """
@@ -433,11 +345,7 @@ class Path_Plan_Execute():
         if len(self.goal_joint_state.position) > 0:
             movegroup_goal_msg = MoveGroup.Goal()
 
-            movegroup_goal_msg = self.set_initial_condition(movegroup_goal_msg)
-            movegroup_goal_msg = self.update_current_jointstate(
-                movegroup_goal_msg)
-            movegroup_goal_msg = self.set_planning_options(movegroup_goal_msg)
-            movegroup_goal_msg = self.set_goal_constraints(movegroup_goal_msg)
+            movegroup_goal_msg = self.create_movegroup_msg(movegroup_goal_msg)
 
             self.send_goal_future = self.movegroup_client.send_goal_async(
                 movegroup_goal_msg,
@@ -512,73 +420,6 @@ class Path_Plan_Execute():
             joint_trajectories.append(joint_trajectory)
 
         return joint_trajectories
-
-    def execute_path(self):
-        """
-        Execute a previously planned path.
-
-        Execute a planned path by calling the execute_trajectory_client,
-        and sends a future object to indicate completion of the async call.
-
-        Args:
-        ----
-        None
-
-        """
-        executetrajectory_goal_msg = ExecuteTrajectory.Goal()
-        executetrajectory_goal_msg.trajectory = self.planned_trajectory
-        self.send_goal_future = (
-            self.executetrajectory_client.send_goal_async(
-                executetrajectory_goal_msg,
-                feedback_callback=self.feedback_callback
-            )
-        )
-        self.send_goal_future.add_done_callback(
-            self.executetrajectory_goal_response_callback)
-
-    def executetrajectory_goal_response_callback(self, future):
-        """
-        Provide a future result.
-
-        Provide a future result on the execute path callback.
-
-        Args:
-        ----
-        future (result) : the future object from the async
-        execute_path function
-
-        """
-        self.executetrajectory_goal_handle = future.result()
-        self.node.get_logger().info(
-            f"self.executetrajectory_goal_handle: {self.executetrajectory_goal_handle}")
-        if not self.executetrajectory_goal_handle.accepted:
-            self.node.get_logger().info('Execute Goal Rejected :P')
-            return
-
-        self.node.get_logger().info('Execute Goal Accepted :)')
-
-        self.get_result_future = self.executetrajectory_goal_handle.get_result_async()
-        self.get_result_future.add_done_callback(
-            self.get_executetrajectory_result_callback)
-
-    def get_executetrajectory_result_callback(self, future):
-        """
-        Provide a future result.
-
-        Provide a future result on the goal response callback.
-
-        Args:
-        ----
-        future (result) : the future object from the async
-        get_trajectory_result function
-
-        """
-        self.executetrajectory_result = future.result().result
-        self.executetrajectory_status = future.result().status
-        self.node.get_logger().info(
-            f"EXECUTE TRAJECTORY STATUS: {self.executetrajectory_status}")
-        self.node.get_logger().info(
-            f'Result Error Code: {self.executetrajectory_result.error_code}')
 
     async def feedback_callback(self, feedback_msg):
         """
