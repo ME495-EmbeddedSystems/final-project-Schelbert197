@@ -17,6 +17,7 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import TransformStamped
 
 from trajectory_msgs.msg import JointTrajectory
+from brain_interfaces.msg import Cartesian
 from std_msgs.msg import Header, String, Float32
 
 from moveit_msgs.srv import GetCartesianPath
@@ -42,6 +43,9 @@ class State(Enum):
     EXECUTING = auto()
     WAITING = auto()
 
+    PLAN_BIG_MOVE = auto()
+    PLAN_CARTESIAN_MOVE = auto()
+
 
 class Drawing(Node):
     """
@@ -57,6 +61,7 @@ class Drawing(Node):
     """
 
     def __init__(self):
+
         super().__init__("Drawing")
 
         # declare parameters
@@ -89,34 +94,51 @@ class Drawing(Node):
 
         self.path_planner = Path_Plan_Execute(self)
 
-        # create subscriber
-
+        # these are used for computing the current location of the end-effector
+        # using the tf tree.
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
 
+        ############# create subscribers ################
+
+        # this subscriber is for the brain node to send singular poses for
+        # this node to plan paths to using the moveit motion planner
+        self.moveit_mp_sub = self.create_subscription(
+            Cartesian, '/moveit_mp', self.moveit_mp_callback, 10)
+
+        # this subscriber is for the brain node to send lists of poses
+        # for this node to use to plan paths using the cartesian motion
+        # planner. It also sends a Point() object, which contains the
+        # start position of the letter to be planned
+        self.cartesian_mp_sub = self.create_subscription(
+            Pose, '/cartesian_mp', self.cartesian_mp_callback, 10)
+
+        # this subscriber is used for communicating with the node we created
+        # to execute our trajectories.
         self.chatting_sub = self.create_subscription(
             String, '/chatting', self.chatting_callback, 10, callback_group=self.chatting_callback_group)
 
-        # create publisher
-        self.trajectory_pub = self.create_publisher(
-            JointTrajectory, '/panda_arm_controller/joint_trajectory', 10)
+        ############# create publishers ##############
 
+        # this publisher is used to send the joint trajectories we plan to our
+        # node that we created to execute them.
         self.joint_traj_pub = self.create_publisher(
             JointTrajectories, '/joint_trajectories', 10)
 
+        # this publisher is used to send the current force at the end-effector
+        # to the node we created to execute trajectories.
         self.force_pub = self.create_publisher(
             Float32, '/ee_force', 10)
 
-        # create services
-        self.pick_service = self.create_service(
-            Empty, 'draw', self.pick_callback)
-
         self.font_size = 0.1
-        self.touch_board_queue = []
-        self.letter_queue = []
+        self.big_move_queue = []
+        self.cartesian_move_queue = []
 
-        self.stage = State.STOP
-        self.state = State.STOP
+        self.moveit_mp_queue = []  # moveit motion planner queue
+        self.cartesian_mp_queue = []  # cartesian motion planner queue
+        self.letter_start_point = []
+
+        self.state = State.CALIBRATE
 
         self.L1 = 0.1070  # length of panda_link7
         self.L2 = 0.1130  # distancefrom panda_joint7 to gripper tips
@@ -126,16 +148,75 @@ class Drawing(Node):
         self.calibration_counter = 0
 
         self.current_pos = Point(x=0.0, y=0.0, z=0.0)
+        self.letter_start_pos = Point(x=0.0, y=0.0, z=0.0)
+
+        self.home_position = Pose(
+            position=Point(x=-0.5, y=0.0, z=0.4),
+            orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
+        )
 
         self.prev_state = State.STOP
 
     def chatting_callback(self, msg):
+
+        # the "done" message signifies that the trajectory execution node has finished
+        # executing the trajectory it was assigned. Once this happens, we should go back
+        # to the planning state, and from there if there's nothing in the queue the state
+        # will change to waiting.
+
         if msg.data == "done":
-            self.state = State.PLANNING
+            trans, rotation = self.get_transform(
+                'panda_link0', 'panda_hand_tcp')
+            self.letter_start_pos = Point(x=trans[0], y=trans[1], z=trans[2])
+            self.state = State.PLAN_BIG_MOVE
+
+    def moveit_mp_callback(self, msg):
+        self.moveit_mp_queue.append(msg)
+
+    def cartesian_mp_callback(self, msg):
+        '''
+        Queue a letter to be drawn.
+
+        This function will be called when the brain node sends
+        this node a message with a cartesian path to plan. I had an
+        idea that the brain can just send this node a list of poses
+        that would need to traveled to for drawing a letter, and that
+        this node could add in some in-between movements that help guide
+        the robot to the correct position on the board. We can discuss this.
+
+        Args:
+        ----
+        msg: the custom message (brain_interfaces/Cartesian.msg)
+        '''
+
+        self.letter_start_point.y = msg.start_point.y
+        self.letter_start_point.z = msg.start_point.z
+
+        # queue a move so that the end-effector moves laterally
+        # in front of the position on the whiteboard we'd like to
+        # start drawing the letter. This is very important for
+        # maintaining accuracy.
+        self.cartesian_mp_queue.append([Pose(
+            position=Point(x=self.home_position.position.x,
+                           y=self.letter_start_point.position.y,
+                           z=self.letter_start_point.position.z)
+        )])
+
+        # queue a move to go and touch the board. I picked
+        # 0.5m because it's just a big number. All we need
+        # is to place this point somewhere behind the white-
+        # board.
+        self.cartesian_mp_queue.append([Pose(
+            position=Point(x=self.home_position.position.x + 0.5,
+                           y=self.letter_start_point.position.y,
+                           z=self.letter_start_point.position.z)
+        )])
+
+        self.cartesian_mp_queue.append(msg.poses)
 
     def get_transform(self, parent_frame, child_frame):
         """
-        Try catch block for Listning transforms between parent and child frame.
+        Try catch block for listening to transforms between parent and child frame.
 
         Args:
         ----
@@ -181,8 +262,8 @@ class Drawing(Node):
         pose2.position = Point(x=-self.x_init - 0.3, y=self.y_init, z=0.4)
         pose2.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
 
-        self.touch_board_queue.append(pose1)
-        self.touch_board_queue.append(pose2)
+        self.big_move_queue.append(pose1)
+        self.cartesian_move_queue.append(pose2)
 
     def queue_letter(self, letter):
 
@@ -191,37 +272,19 @@ class Drawing(Node):
             pose.position = Point(
                 x=self.current_pos[0], y=self.current_pos[1] + point[0] * self.font_size, z=self.current_pos[2] + point[1] * self.font_size)
             pose.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-            self.letter_queue.append(pose)
+            self.cartesian_move_queue.append(pose)
 
         move_back = Pose()
         move_back.position = Point(
             x=self.current_pos[0]+0.05, y=self.current_pos[1], z=self.current_pos[2])
         move_back.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-        self.letter_queue.append(move_back)
+        self.cartesian_move_queue.append(move_back)
 
         move_side = Pose()
         move_side.position = Point(
             x=self.current_pos[0]+0.05, y=self.current_pos[1] + 0.01, z=self.current_pos[2])
         move_side.orientation = Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
-        self.letter_queue.append(move_side)
-
-    def pick_callback(self, request, response):
-        """
-        Listen for a callback from the pick service.
-
-        Listens for a callback from the pick service. When a service call
-        is received, set the state to START.
-
-        Args:
-        ----
-            request: The service call's request containing data.
-            response: This node does not deliver a response.
-
-        """
-        self.stage = State.TOUCHING_BOARD
-        self.state = State.CALIBRATE
-
-        return response
+        self.cartesian_move_queue.append(move_side)
 
     async def timer_callback(self):
         """
@@ -238,110 +301,85 @@ class Drawing(Node):
         None
 
         """
-        # check whether or not the marker is running into the board, and sometimes, successfully.
-        # self.get_logger().info(f"stage: {self.stage}")
-        # self.get_logger().info(f"state: {self.state}\n")
+        if self.state == State.CALIBRATE:
 
-        if self.stage == State.TOUCHING_BOARD:
-            if self.state == State.CALIBRATE:
-                calibration_cycles = 100
-                while self.calibration_counter < calibration_cycles:
-                    self.force_offset += self.path_planner.current_joint_state.effort[5] / (
-                        self.L1 + self.L2)
-                    self.calibration_counter += 1
+            # here we figure out what the force offset should be by using an average.
+            # we take 100 readings of the effort in panda_joint6, and take the average
+            # to assign the force offset in the joint due to gravity.
 
-                self.force_offset = self.force_offset/calibration_cycles
-                self.state = State.LOAD_MOVES
+            calibration_cycles = 100
+            while self.calibration_counter < calibration_cycles:
+                self.force_offset += self.path_planner.current_joint_state.effort[5] / (
+                    self.L1 + self.L2)
+                self.calibration_counter += 1
 
-            elif self.state == State.LOAD_MOVES:
-                self.queue_touch_board_moves()
-                self.state = State.PLANNING
+            self.force_offset = self.force_offset/calibration_cycles
+            self.state = State.WAITING
 
-            elif self.state == State.PLANNING and len(self.touch_board_queue) != 0:
+        elif self.state == State.PLAN_BIG_MOVE:
 
-                await self.path_planner.get_goal_joint_states(self.touch_board_queue[0])
-                self.path_planner.plan_path()
+            # here we check to see if the big_move queue is empty, and if not,
+            # we use the moveit motion planner to create a trajectory.
+            # then we go to the waiting loop, where we will wait for the future
+            # to return true.
 
-                self.state = State.WAITING
+            if not self.big_move_queue:  # check if the queue is empty
+                self.state == State.PLAN_CARTESIAN_MOVE
+                return
 
-                self.touch_board_queue.pop(0)
+            await self.path_planner.get_goal_joint_states(self.big_move_queue[0])
+            self.path_planner.plan_path()
 
-            elif self.state == State.EXECUTING:
+            self.state = State.WAITING
 
-                joint_trajectories = JointTrajectories()
-                joint_trajectories.clear = False
-                joint_trajectories.state = "publish"
+            self.big_move_queue.pop(0)
 
-                ee_force = self.path_planner.current_joint_state.effort[5] / (
-                    self.L1 + self.L2) - self.force_offset
+        elif self.state == State.PLAN_CARTESIAN_MOVE:
 
-                if ee_force > self.force_threshold:
-                    # self.path_planner.joint_trajectories.clear
-                    joint_trajectories.clear = True
-                    joint_trajectories.state = "stop"
+            # check to see if the cartesian move queue is empty, and if not
+            # then plan a cartesian path using the poses in the queue. The
+            # /compute_cartesian_path service takes in a list of poses, and
+            # creates a trajectory to visit all of those poses.
 
-                joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
+            if not self.cartesian_move_queue:
+                self.state == State.WAITING
 
-                self.joint_traj_pub.publish(joint_trajectories)
+            await self.path_planner.plan_cartesian_path(self.cartesian_move_queue)
 
-                self.state = State.WAITING
+            self.cartesian_move_queue.clear()
+            self.state = State.EXECUTING
 
-            elif self.state == State.WAITING:
+        elif self.state == State.EXECUTING:
 
-                ee_force = self.path_planner.current_joint_state.effort[5] / (
-                    self.L1 + self.L2) - self.force_offset
+            # send the trajectory previously planned, either by the moveit motion
+            # planner or the cartesian path planner, to our node for executing trajectories.
 
-                self.force_pub.publish(Float32(data=ee_force))
+            joint_trajectories = JointTrajectories()
+            joint_trajectories.clear = False
+            joint_trajectories.state = "publish"
 
-                if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
-                    # separate the planned trajectory into individual trajectories
-                    self.state = State.EXECUTING
+            joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
-                    self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
+            self.joint_traj_pub.publish(joint_trajectories)
 
-            elif len(self.touch_board_queue) == 0:
+            self.state = State.WAITING
 
-                self.stage = State.WRITING_LETTERS
-                self.state = State.GET_TRANSFORM
+        elif self.state == State.WAITING:
 
-        elif self.stage == State.WRITING_LETTERS:
+            # calculate the current force at the end-effector, and send it to the
+            # node that is executing our trajectory. Also, check to see whether
+            # the moveit motion planner has completed planning. This will only
+            # happen if the state prior was State.PLAN_BIG_MOVE.
 
-            if self.state == State.GET_TRANSFORM:
+            ee_force = self.path_planner.current_joint_state.effort[5] / (
+                self.L1 + self.L2) - self.force_offset
 
-                trans, rotation = self.get_transform(
-                    'panda_link0', 'panda_hand_tcp')
-                self.current_pos = trans
-                self.state = State.LOAD_MOVES
+            self.force_pub.publish(Float32(data=ee_force))
 
-            elif self.state == State.LOAD_MOVES:
+            if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
-                self.queue_letter('a')
-                self.state = State.PLANNING
-
-            elif self.state == State.PLANNING and len(self.letter_queue) != 0:
-
-                await self.path_planner.plan_cartesian_path(self.letter_queue)
-
-                # self.get_logger().info(f"letter_queue: {self.letter_queue}")
-                self.letter_queue.clear()
                 self.state = State.EXECUTING
-
-            elif self.state == State.EXECUTING:
-
-                self.path_planner.execute_path()
-                self.state = State.WAITING
-
-            elif self.state == State.WAITING:
-
-                if self.path_planner.executetrajectory_status == GoalStatus.STATUS_SUCCEEDED:
-
-                    self.state = State.PLANNING
-                    self.path_planner.executetrajectory_status = GoalStatus.STATUS_UNKNOWN
-
-            elif len(self.letter_queue) == 0:
-
-                self.stage = State.STOP
-                self.state = State.STOP
+                self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
 
 
 def main(args=None):

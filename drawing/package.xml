@@ -13,6 +13,7 @@
   <test_depend>python3-pytest</test_depend>
   <exec_depend>character_interfaces</exec_depend>
   <exec_depend>joint_interfaces</exec_depend>
+  <exec_depend>brain_interfaces</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

@@ -33,6 +33,7 @@ class Executor(Node):
             Float32, '/ee_force', self.force_callback, 10)
         self.joint_trajectories = []
         self.ee_force = 0
+        self.ee_force_threshold = 1.5  # N
         self.state = None
         self.clear = False
 
@@ -55,7 +56,7 @@ class Executor(Node):
 
     def timer_callback(self):
 
-        if self.ee_force > 1.5:
+        if self.ee_force > self.ee_force_threshold:
             self.joint_trajectories.clear()
             self.clear = False
 
