@@ -4,4 +4,4 @@ int64[] mode
 int64[] position
 ---
 # returns a Pose
-geometry_msgs/Pose origin_pose
+geometry_msgs/Pose[] origin_pose
