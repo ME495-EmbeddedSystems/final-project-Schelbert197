@@ -1,0 +1,7 @@
+# mode refers to 0 (wrong answer), 1 (right answer), 2 (drawing man)
+# position refers to the array position of the tile (for the hangman, this is order of writing)
+int64[] mode
+int64[] position
+---
+# returns a Pose
+geometry_msgs/Pose origin_pose
