@@ -1,0 +1,19 @@
+Here are the notes about gripper and working params that work with the two different expo marker types (fine tip and regular):
+
+First home the gripper:
+ros2 action send_goal /panda_gripper/homing franka_msgs/action/Homing "{}"
+
+We are now using the Grasp Action which can be run from the terminal as follows:
+ros2 action send_goal /panda_gripper/grasp franka_msgs/action/Grasp "{width: 0.012, speed: 0.05, force: 50.0}"
+
+Params for each pen:
+Fine tip:
+- width: 0.009
+- speed: 0.05
+- force: 50.0
+Regular tip:
+- width: 0.012
+- speed: 0.05
+- force: 50.0
+
+These widths have been tested on the frankas and SHOULD work.
