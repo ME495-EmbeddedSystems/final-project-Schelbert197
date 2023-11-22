@@ -1,2 +1,5 @@
+*.pyc
+.vscode/**
+ocr/ocr/cv_tuning.py
 **__pycache__**
 **.vscode**
