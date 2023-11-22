@@ -3,6 +3,7 @@ from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from std_srvs.srv import Empty
+from std_msgs.msg import Bool
 from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextToPath
 from brain_interfaces.msg import Cartesian
@@ -19,6 +20,7 @@ class State(Enum):
     CALIBRATE = auto(),
     SETUP = auto(),
     WAITING = auto(),
+    READING = auto(),
     LETTER = auto()
 
 
@@ -38,6 +40,9 @@ class Brain(Node):
 
         self.cartesian_mp_pub = self.create_publisher(
             Cartesian, '/cartesian_mp', 10)
+        
+        self.ocr_pub = self.create_publisher(
+            Bool, '/ocr_run', 10)
 
         # create services
 
@@ -51,6 +56,9 @@ class Brain(Node):
         # Create subscription from hangman.py
         self.hangman = self.create_subscription(
             LetterMsg, '/writer', callback=self.hangman_callback, qos_profile=10)
+        self.home = self.create_subscription(
+            Bool, '/RTH', callback=self.home_callback, qos_profile=10)
+
 
         # define global variables
 
@@ -118,6 +126,14 @@ class Brain(Node):
         # switches to letter
         self.state = State.LETTER
 
+    def home_callback(self, msg:Bool):
+        """Callback for whether or not the robot has returned to home after writing"""
+        if msg == True:
+            self.ocr_pub.publish(True)
+            self.state = State.READING
+        else:
+            self.state = State.WAITING
+
     def timer_callback(self):
         if self.state == State.INITIALIZE:
 
@@ -172,6 +188,11 @@ class Brain(Node):
 
             # TODO: Will need to add the call to start the OCR before we go to the waiting state
             self.state = State.WAITING
-            
+
         elif self.state == State.WAITING:
+            # waiting state for writing actions
+            pass
+        
+        elif self.state == State.READING:
+            # waiting state for the OCR to run that will get switched to LETTER by hangman callback
             pass
