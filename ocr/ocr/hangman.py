@@ -81,30 +81,56 @@ class Hangman(Node):
         """Evaluates the guess from the user"""
         
         upper_guess = guess.upper()
+        letter_list = []
+        position_list = []
+        mode_list = []
         if len(guess) > 1:
             if upper_guess == self.word:
                 self.get_logger().info('winning')
                 for q in range(len(upper_guess)):
-                    self.word_status[q] = upper_guess[q]
+                    if self.word_status[q] == upper_guess[q]:
+                        self.word_status[q] = upper_guess[q]
+                    else:
+                        letter_list.append(upper_guess[q])
+                        # write unfilled letters
+                        position_list.append(q)
+                        mode_list.append(1)
+                        self.word_status[q] = upper_guess[q]
                 self.game_won = True
             else:
                 self.get_logger().info('word incorrect')
+                # write hangman parts only
+                mode_list.append(2)
+                position_list.append(len(self.current_wrong_guesses))
+                letter_list.append(0)
                 self.current_wrong_guesses += 1
         elif len(guess) == 1 and upper_guess not in self.guessed_letters:
             if upper_guess in self.word:
                 self.get_logger().info('letter in word')
-                pos = []
                 for i in range(len(self.word)):
                     if upper_guess == self.word[i]:
                         self.word_status[i] = upper_guess
-                        pos.append(i)
-                self.send_letter(upper_guess,pos)
+                        # write correct letters in correct spots
+                        position_list.append(i)
+                        letter_list.append(upper_guess)
+                        mode_list.append(1)
             else:
                 self.get_logger().info('wrong guess')
                 self.guessed_letters.append(upper_guess)
+                # write wrong letter
+                letter_list.append(upper_guess)
+                mode_list.append(0)
+                position_list.append(len(self.current_wrong_guesses))
+                # write hangman
+                letter_list.append(0)
+                mode_list.append(2)
+                position_list.append(len(self.current_wrong_guesses))
+                # increment wrong guesses
                 self.current_wrong_guesses += 1
         else:
             self.get_logger().info('invalid guess')
+        # sends the list of things to be written to be packaged and published
+        self.send_letter(positions=position_list, mode=mode_list, letters=letter_list)
 
     def prompt_user(self):
         """User prompt for testing, This would get replaced by OCR pipeline client"""
@@ -118,12 +144,12 @@ class Hangman(Node):
         self.get_logger().info(f"Wrong guesses: {self.current_wrong_guesses}")
         self.draw_man()
 
-    def send_letter(self, letter, positions):
+    def send_letter(self, letters, positions, mode):
         """Publishes the list of points that define the letter to the ros topic for the franka to read"""
         letter_to_send = LetterMsg()
         letter_to_send.positions = positions
-        letter_to_send.xpoints = self.Alphabet[letter]['xlist']
-        letter_to_send.ypoints = self.Alphabet[letter]['ylist']
+        letter_to_send.letters = letters
+        letter_to_send.mode = mode
         self.writer.publish(letter_to_send)
 
     def draw_man(self):
