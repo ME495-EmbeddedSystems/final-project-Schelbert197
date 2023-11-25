@@ -12,7 +12,11 @@ setup(
         ('share/' + package_name,
          [
              'package.xml',
-             'launch/drawing.launch.xml'
+             'launch/drawing.launch.xml',
+             'launch/april_tag.launch.xml',
+             'launch/image_proc.launch.py',
+             'config/tag.yaml',
+             'config/view_camera.rviz'
          ]
          ),
     ],
@@ -27,7 +31,8 @@ setup(
     entry_points={
         'console_scripts': [
             "draw = drawing.draw:main",
-            "executor = drawing.send_trajectories:main"
+            "executor = drawing.send_trajectories:main",
+            "tags = drawing.tags:Tags_entry",
         ],
     },
 )

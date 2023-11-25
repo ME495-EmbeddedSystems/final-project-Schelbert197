@@ -341,7 +341,7 @@ class Path_Plan_Execute():
         """
         self.movegroup_status = GoalStatus.STATUS_UNKNOWN
         self.movegroup_result = None
-
+        # await get_goal_joint_states()
         if len(self.goal_joint_state.position) > 0:
             movegroup_goal_msg = MoveGroup.Goal()
 
@@ -436,3 +436,31 @@ class Path_Plan_Execute():
         """
         feedback = feedback_msg.feedback
         self.node.get_logger().info(f"Received Feedback: {feedback}")
+        
+    def set_goal_pose(self, point):
+        """
+        Set desired goal position.
+
+        Set the desired goal position for the robot arm.
+
+        Args:
+        ----
+        point (Point) : The goal cartesian point of the end effector
+
+        """
+        self.goal_pose = point
+        self.goal_orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
+
+    def set_goal_orientation(self, orientation):
+        """
+        Set desired goal oreintation.
+
+        Set the desired goal orientation for the robot arm. This
+        function is used in the picker node.
+
+        Args:
+        ----
+        orientation (Quaternion) : The orientation of the end effector
+
+        """
+        self.goal_orientation = orientation
