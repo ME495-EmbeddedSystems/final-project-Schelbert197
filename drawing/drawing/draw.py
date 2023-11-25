@@ -56,6 +56,7 @@ class Drawing(Node):
         super().__init__("Drawing")
 
         # declare parameters
+        self.declare_parameter('use_fake_hardware', True)
         self.declare_parameter('x_init', 0.5)
         self.declare_parameter('y_init', 0.0)
         self.declare_parameter('robot_name', 'panda')
@@ -63,6 +64,14 @@ class Drawing(Node):
         self.declare_parameter('frame_id', 'panda_link0')
 
         # get parameters
+        self.use_fake_hardware = self.get_parameter(
+            'use_fake_hardware').get_parameter_value().bool_value
+
+        # if self.use_fake_hardware == "true":
+        #     self.use_fake_hardware = True
+        # else:
+        #     self.use_fake_hardware = False
+
         self.x_init = self.get_parameter(
             'x_init').get_parameter_value().double_value
         self.y_init = self.get_parameter(
@@ -122,8 +131,6 @@ class Drawing(Node):
             Float32, '/ee_force', 10)
 
         self.font_size = 0.1
-        self.big_move_queue = []
-        self.cartesian_move_queue = []
 
         self.moveit_mp_queue = []  # moveit motion planner queue
         self.cartesian_mp_queue = []  # cartesian motion planner queue
@@ -134,9 +141,10 @@ class Drawing(Node):
         self.L1 = 0.1070  # length of panda_link7
         self.L2 = 0.1130  # distancefrom panda_joint7 to gripper tips
 
-        self.force_offset = 0
-        self.force_threshold = 3  # N
-        self.calibration_counter = 0
+        self.force_offset = 0.0  # N
+        self.force_threshold = 3.0  # N
+        self.calibration_counter = 0.0  # N
+        self.ee_force = 0.0  # N
 
         self.current_pos = Point(x=0.0, y=0.0, z=0.0)
         self.letter_start_pos = Point(x=0.0, y=0.0, z=0.0)
@@ -163,6 +171,7 @@ class Drawing(Node):
 
     def moveit_mp_callback(self, msg):
         self.moveit_mp_queue.append(msg)
+        self.state = State.PLAN_MOVEGROUP
 
     def cartesian_mp_callback(self, msg):
         '''
@@ -204,6 +213,7 @@ class Drawing(Node):
         )])
 
         self.cartesian_mp_queue.append(msg.poses)
+        self.state = State.PLAN_CARTESIAN_MOVE
 
     def get_transform(self, parent_frame, child_frame):
         """
@@ -264,6 +274,11 @@ class Drawing(Node):
             # here we figure out what the force offset should be by using an average.
             # we take 100 readings of the effort in panda_joint6, and take the average
             # to assign the force offset in the joint due to gravity.
+            self.get_logger().info(
+                f"self.use_fake_hardware: {self.use_fake_hardware}")
+            if self.use_fake_hardware:
+                self.state = State.WAITING
+                return
 
             calibration_cycles = 100
             while self.calibration_counter < calibration_cycles:
@@ -281,16 +296,18 @@ class Drawing(Node):
             # then we go to the waiting loop, where we will wait for the future
             # to return true.
 
-            if not self.big_move_queue:  # check if the queue is empty
+            if not self.moveit_mp_queue:  # check if the queue is empty
                 self.state == State.PLAN_CARTESIAN_MOVE
                 return
 
-            await self.path_planner.get_goal_joint_states(self.big_move_queue[0])
+            self.get_logger().info(
+                f"self.moveit_mp_queue[0]: {self.moveit_mp_queue[0]}")
+            await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
             self.path_planner.plan_path()
 
             self.state = State.WAITING
 
-            self.big_move_queue.pop(0)
+            self.moveit_mp_queue.pop(0)
 
         elif self.state == State.PLAN_CARTESIAN_MOVE:
 
@@ -299,12 +316,12 @@ class Drawing(Node):
             # /compute_cartesian_path service takes in a list of poses, and
             # creates a trajectory to visit all of those poses.
 
-            if not self.cartesian_move_queue:
+            if not self.cartesian_mp_queue:
                 self.state == State.WAITING
 
-            await self.path_planner.plan_cartesian_path(self.cartesian_move_queue)
+            await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue)
 
-            self.cartesian_move_queue.clear()
+            self.cartesian_mp_queue.clear()
             self.state = State.EXECUTING
 
         elif self.state == State.EXECUTING:
@@ -329,10 +346,11 @@ class Drawing(Node):
             # the moveit motion planner has completed planning. This will only
             # happen if the state prior was State.PLAN_MOVEGROUP.
 
-            ee_force = self.path_planner.current_joint_state.effort[5] / (
-                self.L1 + self.L2) - self.force_offset
+            if not self.use_fake_hardware:
+                self.ee_force = self.path_planner.current_joint_state.effort[5] / (
+                    self.L1 + self.L2) - self.force_offset
 
-            self.force_pub.publish(Float32(data=ee_force))
+            self.force_pub.publish(Float32(data=self.ee_force))
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
