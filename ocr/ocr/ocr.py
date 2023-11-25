@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
+<<<<<<< HEAD
 from paddleocr import PaddleOCR
 
 from sensor_msgs.msg import Image
@@ -96,6 +97,35 @@ class Ocr(Node):
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
         cv2.imshow("image", self.frame)
         cv2.waitKey(1)
+=======
+
+
+class Ocr(Node):
+        def __init__(self):
+            super().__init__("ocr")
+
+            self.timer = self.create_timer(1.0/200.0, self.timer_callback)
+
+            self.cap = cv2.VideoCapture(0)
+
+        def timer_callback(self):
+            """
+            Callback function.
+            This function gets called every 0.1 seconds.
+            """
+            # Capture frame-by-frame
+            # This method returns True/False as well
+            # as the video frame.
+            ret, frame = self.cap.read()
+                
+            if ret == True:
+                # Display image
+                cv2.imshow("camera", frame)
+                
+                cv2.waitKey(1)  
+            # Display the message on the console
+            self.get_logger().info('Publishing video frame')
+>>>>>>> 25da7c6 (Working opencv example inside a ros node.)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -103,5 +133,11 @@ def main(args=None):
     rclpy.spin(node)
     rclpy.shutdown()
 
+<<<<<<< HEAD
 if __name__ == "__main__":
     main()
+=======
+
+if __name__ == "__main__":
+    main()
+>>>>>>> 25da7c6 (Working opencv example inside a ros node.)

@@ -9,7 +9,11 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
+<<<<<<< HEAD
         ('share/' + package_name, ['package.xml', "launch/ocr_game.launch.xml"]),
+=======
+        ('share/' + package_name, ['package.xml']),
+>>>>>>> 25da7c6 (Working opencv example inside a ros node.)
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,8 +24,12 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+<<<<<<< HEAD
             "ocr = ocr.ocr:main",
             "hangman = ocr.hangman:main"
+=======
+            "ocr = ocr.ocr:main"
+>>>>>>> 25da7c6 (Working opencv example inside a ros node.)
         ],
     },
 )
