@@ -13,23 +13,26 @@ import numpy as np
 import transforms3d as tf
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
+from std_msgs.msg import String
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv  import BoardTiles
+from brain_interfaces.srv import BoardTiles
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
 import modern_robotics as mr
 
+
 class State(Enum):
     CALIBRATE = auto()
     OTHER = auto()
 
+
 class Grid:
     def __init__(self, xrange, yrange, cell_size):
-       
-        
+
         self.xrange = xrange
         self.yrange = yrange
         self.cell_size = cell_size
@@ -37,7 +40,17 @@ class Grid:
         self.ynum = int(((self.yrange[1] - self.yrange[0]) / self.cell_size))
         self.grid = np.zeros((self.ynum, self.xnum))
 
-    def grid_to_world(self, point):
+    def grid_to_world(self, mode, position):
+        if mode == 0:
+            point = (4, position+1)
+        if mode == 1:
+            point = (2, position+1)
+        if mode == 2:
+            if position == 1:
+                point = (5, 0)
+            else:
+                point = (position-1, 1)
+
         point_x = (point[0])*self.cell_size + self.xrange[0]
         point_y = (point[1])*self.cell_size + self.yrange[0]
         return [point_x, point_y]
@@ -62,33 +75,30 @@ class Tags(Node):
             Empty, 'record_transform', self.record_callback)
         self.calibrate_service = self.create_service(
             Empty, 'calibrate', self.calibrate_callback)
-        self.where_to_write = self.create_service(BoardTiles,'where_to_write',self.where_to_write_callback)
+        self.where_to_write = self.create_service(
+            BoardTiles, 'where_to_write', self.where_to_write_callback)
+        self.state_publisher = self.create_publisher(String, 'cal_state', 10)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
         self.make_transform()
-        
-        #making broadcast between board and robot
+
+        # making broadcast between board and robot
         self.broadcaster = TransformBroadcaster(self)
         self.robot_board = TransformStamped()
         self.robot_board.header.frame_id = "panda_link0"
         self.robot_board.child_frame_id = "board"
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
-        
 
         # ([0.4705757399661665, -0.7141633025201061, -0.006788132506325206], [-0.07728659290456086, 0.7088900493225068, 0.7007328395121232, -0.021798352185783326])
 
-    
-    
-    
     def make_transform(self):
 
         self.robot_to_camera = TransformStamped()
         self.robot_to_camera.header.stamp = self.get_clock().now().to_msg()
         self.robot_to_camera.header.frame_id = "panda_hand_tcp"
         self.robot_to_camera.child_frame_id = "camera_link"
-  
 
         self.robot_to_camera.transform.translation = Vector3(
             x=0.03524146, y=-0.015, z=-0.043029)
@@ -97,7 +107,7 @@ class Tags(Node):
         # self.get_logger().info(type(self))
         self.tf_static_broadcaster.sendTransform(self.robot_to_camera)
 
-    def matrix_to_position_quaternion(self,matrix):
+    def matrix_to_position_quaternion(self, matrix):
         translation = matrix[:3, 3]
         rotation_matrix = matrix[:3, :3]
 
@@ -110,14 +120,15 @@ class Tags(Node):
 
         # Create Quaternion for rotation
         rotation = Quaternion()
-        rotation.w,rotation.x, rotation.y, rotation.z = quaternion
+        rotation.w, rotation.x, rotation.y, rotation.z = quaternion
 
         return position, rotation
 
     def array_to_transform_matrix(self, translation, quaternion):
         # Normalize the quaternion
         quaternion /= np.linalg.norm(quaternion)
-        quaternion = [quaternion[3], quaternion[0], quaternion[1],quaternion[2]]
+        quaternion = [quaternion[3], quaternion[0],
+                      quaternion[1], quaternion[2]]
 
         # Create rotation matrix from quaternion
         rotation_matrix = tf.quaternions.quat2mat(quaternion)
@@ -130,41 +141,29 @@ class Tags(Node):
         return transform_matrix
 
     async def where_to_write_callback(self, request, response):
-        self.path_planner.set_goal_pose(
-            Point(x=0.3405757399661665, y=-0.6041633025201061, z=0.0))
-        self.path_planner.set_goal_orientation(
-            Quaternion(x=-0.5744922163820316, y=0.577965619924962,z= -0.3987692152610244,w= -0.42059190251516054))
-        await self.path_planner.plan_path()
-        # await self.path_planner.get_goal_joint_states()
-        # self.path_planner.plan_path()
+        response = []
+        pos = Pose()
+        ansT, ansR = self.get_transform('panda_link0', 'board')
+        Trb = self.array_to_transform_matrix(ansT,ansR)
+        for i in range(len(request.mode)):
+            x,y = self.grid.grid_to_world(request.mode[i], request.position[i])
+            Tbl = Ttb = np.array([[1, 0, 0, x],
+                                [0, 1, 0, y],
+                                [0, 0, 1, 0],
+                                [0, 0, 0, 1]])
+            Trl = Trb @ Tbl
+            position, rotation = self.matrix_to_position_quaternion(Trl)
+            pos.position = position
+            pos.orientation = rotation
+            
+            response.append(pos)
+            
+            
         return response
 
     async def calibrate_callback(self, request, response):
-        ##TODO:move the robot
-        
         self.state = State.CALIBRATE
-        ansT, ansR = self.get_transform('panda_link0','tag11')
-        self.get_logger().info(f'Trt: {ansT,ansR}')
-        while ansT[0] == 0.0:
-            ansT, ansR = self.get_transform('panda_link0','tag11')
-            self.get_logger().info(f'Trt: {ansT,ansR}')
 
-        Ttb = np.array([   [1,0,0,0.063],
-                                    [0,1,0,0.063],
-                                    [0,0,1,0],
-                                    [0,0,0,1]]) 
-                # Ttb = np.array([0.063,0.063,0,1])
-        Trt = self.array_to_transform_matrix(ansT,ansR)
-        
-        Trb = Trt @ Ttb
-        self.get_logger().info(f'Trb: \n{Trb}')
-        pos,rotation = self.matrix_to_position_quaternion(Trb)
-        self.get_logger().info(f'Trt: \n{Trt}')
-        self.get_logger().info(f'Trb: \n{Trb}')
-        self.robot_board.transform.translation = pos
-        self.robot_board.transform.rotation = rotation
-        
-        self.get_logger().info(f'Trb: {pos,rotation}')
         return response
 
     def record_callback(self, request, response):
@@ -246,8 +245,35 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     def timer_callback(self):
+        msg = String()
+
+        if self.state == State.CALIBRATE:
+            # TODO: goto jointstate if reached then do this stuff
+            ansT, ansR = self.get_transform('panda_link0', 'tag11')
+            msg.data = "CALIBRATING"
+            if ansT[0] != 0.0:
+                Ttb = np.array([[1, 0, 0, 0.063],
+                                [0, 1, 0, 0.063],
+                                [0, 0, 1, 0],
+                                [0, 0, 0, 1]])
+                # Ttb = np.array([0.063,0.063,0,1])
+                Trt = self.array_to_transform_matrix(ansT, ansR)
+
+                Trb = Trt @ Ttb
+                self.get_logger().info(f'Trb: \n{Trb}')
+                pos, rotation = self.matrix_to_position_quaternion(Trb)
+                self.get_logger().info(f'Trt: \n{Trt}')
+                self.get_logger().info(f'Trb: \n{Trb}')
+                self.robot_board.transform.translation = pos
+                self.robot_board.transform.rotation = rotation
+                self.state = State.OTHER
+                self.get_logger().info(f'Trb: {pos,rotation}')
+
+        if self.state == State.OTHER:
+            msg.data = "CALIBRATED"
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
+        self.state_publisher.publish(msg)
 
 
 def Tags_entry(args=None):

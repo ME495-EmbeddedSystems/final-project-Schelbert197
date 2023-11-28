@@ -26,4 +26,5 @@
   </node>
 
   <node pkg="drawing" exec="executor" name="Execute"/>
+  <include file="$(find-pkg-share drawing)/april_tag.launch.xml"></include>
 </launch>
