@@ -40,7 +40,7 @@ class Brain(Node):
 
         self.cartesian_mp_pub = self.create_publisher(
             Cartesian, '/cartesian_mp', 10)
-        
+
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
 
@@ -49,16 +49,15 @@ class Brain(Node):
         self.test_service = self.create_service(
             Empty, '/test_brain', self.test_service_callback)
         self.board_service = self.create_client(
-            BoardTiles, '/board_tiles') # create custom service type
+            BoardTiles, '/board_tiles')  # create custom service type
         self.ocr_service = self.create_service(
             Empty, '/ocr_service', self.test_service_callback)
-        
+
         # Create subscription from hangman.py
         self.hangman = self.create_subscription(
             LetterMsg, '/writer', callback=self.hangman_callback, qos_profile=10)
         self.home = self.create_subscription(
             Bool, '/RTH', callback=self.home_callback, qos_profile=10)
-
 
         # define global variables
 
@@ -75,50 +74,52 @@ class Brain(Node):
         """Create the dictionary of bubble letters"""
 
         letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for i in range(0,len(letters)):
+        for i in range(0, len(letters)):
             letter = letters[i]
             fp = FontProperties(family="MS Gothic", style="normal")
             verts, codes = TextToPath().get_text_path(fp, letters[i])
             xlist = []
             ylist = []
-            for j in range(0,len(verts) - 1):
+            for j in range(0, len(verts) - 1):
                 # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
                 xlist.append(verts[j][0])
                 ylist.append(verts[j][1])
-            point_dict = {letter: {'xlist': xlist,'ylist':ylist}}
+            point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
             self.alphabet.update(point_dict)
-    
-    def coords_to_poses(self, letter, tilepose:Pose):
+
+    def coords_to_poses(self, letter, tilepose: Pose):
         # get the coordiantes for the letter from the dictionary
         xcoord = self.alphabet[letter]['xlist']
         ycoord = self.alphabet[letter]['ylist']
         poses = []
         # TODO: write a for loop to create a list of Pose() from the coords
-        for i in range(0,len(xcoord)):
+        for i in range(0, len(xcoord)):
             if xcoord[i] > 0 and ycoord[i] > 0:
                 p = Point(x=tilepose.position.x,
-                        y=tilepose.position.y + (xcoord[i] * self.scale_factor),
-                        z=tilepose.position.z + (ycoord[i] * self.scale_factor))
+                          y=tilepose.position.y +
+                          (xcoord[i] * self.scale_factor),
+                          z=tilepose.position.z + (ycoord[i] * self.scale_factor))
                 quat = tilepose.orientation
                 point_pose = Pose(position=p, orientation=quat)
             else:
                 p = Point(x=tilepose.position.x - 0.2,
-                        y=tilepose.position.y + (xcoord[i] * self.scale_factor),
-                        z=tilepose.position.z + (ycoord[i] * self.scale_factor))
+                          y=tilepose.position.y +
+                          (xcoord[i] * self.scale_factor),
+                          z=tilepose.position.z + (ycoord[i] * self.scale_factor))
                 quat = tilepose.orientation
                 point_pose = Pose(position=p, orientation=quat)
             poses.append(point_pose)
-                
+
     def test_service_callback(self, request, response):
 
         self.state = State.LETTER
 
         return response
-    
+
     # def board_service_callback(self, request, response):
     #     """Callback for the service to get the board tile pose"""
-    
-    def hangman_callback(self, msg:LetterMsg):
+
+    def hangman_callback(self, msg: LetterMsg):
         """Callback when feedback is given from hangman"""
 
         # establishes a global message variable for the duration of the letter state
@@ -126,7 +127,7 @@ class Brain(Node):
         # switches to letter
         self.state = State.LETTER
 
-    def home_callback(self, msg:Bool):
+    def home_callback(self, msg: Bool):
         """Callback for whether or not the robot has returned to home after writing"""
         if msg == True:
             self.ocr_pub.publish(True)
@@ -142,13 +143,14 @@ class Brain(Node):
 
             # its possible this message is sent too fast, and that draw.py
             # doesn't receive it, just keep in mind.
-            
+
             # Moves to the tag calibration state once the robot has reached the home position
             self.state = State.CALIBRATE
 
         elif self.state == State.CALIBRATE:
 
-            self.calibrate_client() # TODO: we will need to add this client that calls the calibrate action
+            # TODO: we will need to add this client that calls the calibrate action
+            self.calibrate_client()
             # This should send the camera calibration service as well
             # TODO: Ananya can put this to have that service call how she prefers
 
@@ -167,16 +169,19 @@ class Brain(Node):
 
             # This for loop will run for each thing that we need to draw based on the message sent from hangman
             # TODO We will need to consider asynchronicity, but this is the flow of info
-            for j in range(0,len(self.last_message.positions)):
+            for j in range(0, len(self.last_message.positions)):
                 # Ananya's code gives origin for the tile that we are working in reference to (taking the mode group and position in group)
-                self.tile_pose:Pose = self.board_service.call_async(self.last_message.mode, self.last_message.positions[j])
+                self.tile_pose: Pose = self.board_service.call_async(
+                    self.last_message.mode, self.last_message.positions[j])
 
                 # Coords to poses takes in the letter and the pose from the board and returns a list of poses for the trajectory
-                letter_poses = self.coords_to_poses(self.last_message.letter, self.tile_pose)
+                letter_poses = self.coords_to_poses(
+                    self.last_message.letter, self.tile_pose)
                 start_point = Pose(
-                    position=Point(x=self.tile_pose.position.x - 0.1, y=self.tile_pose.position.y, z=self.tile_pose.position.z),
+                    position=Point(x=self.tile_pose.position.x - 0.1,
+                                   y=self.tile_pose.position.y, z=self.tile_pose.position.z),
                     orientation=self.tile_pose.orientation
-                ) # start point given by service call TODO: Ananya, please check if this is correct for the start pos
+                )  # start point given by service call TODO: Ananya, please check if this is correct for the start pos
                 # I have made this start point to be 10cm behind the board facing the origin of the tile in question
 
                 # cartesian message type packages the start point and the list of letter poses
@@ -192,7 +197,7 @@ class Brain(Node):
         elif self.state == State.WAITING:
             # waiting state for writing actions
             pass
-        
+
         elif self.state == State.READING:
             # waiting state for the OCR to run that will get switched to LETTER by hangman callback
             pass

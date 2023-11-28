@@ -3,8 +3,9 @@ from rclpy.node import Node
 
 from std_srvs.srv import Empty
 from geometry_msgs.msg import Point, Quaternion, Pose
-from path_planner.path_plan_execute import Path_Plan_Execute
+from sensor_msgs.msg import JointState
 
+from path_planner.path_plan_execute import Path_Plan_Execute
 from character_interfaces.alphabet import alphabet
 from joint_interfaces.msg import JointTrajectories
 
@@ -99,19 +100,26 @@ class Drawing(Node):
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
 
-        ############# create subscribers ################
-
-        # this subscriber is for the brain node to send singular poses for
-        # this node to plan paths to using the moveit motion planner
-        self.moveit_mp_sub = self.create_subscription(
+        ##### create services #####
+        # this service is for the brain node to send singular poses for
+        # this node to plan paths using te moveite motion planner
+        self.moveit_mp_service = self.create_service(
             Pose, '/moveit_mp', self.moveit_mp_callback, 10)
 
-        # this subscriber is for the brain node to send lists of poses
-        # for this node to use to plan paths using the cartesian motion
-        # planner. It also sends a Point() object, which contains the
-        # start position of the letter to be planned
-        self.cartesian_mp_sub = self.create_subscription(
+        # this service is for the brain node to send lists of poses for
+        # this node to use to plan paths using the cartesian motion
+        # planner. It also needs a Point() object, which contains the
+        # start position of the letter to be planned.
+        self.cartesian_mp_service = self.create_service(
             Cartesian, '/cartesian_mp', self.cartesian_mp_callback, 10)
+
+        # this service is for other ROS nodes to send a JointState() msg
+        # to this node. This node will plan a path to the combination of
+        # joint states and the move there.
+        self.plan_joint_state_service = self.create_service(
+            JointState, '/jointstate_mp', self.jointstate_mp_callback, 10)
+
+        ############# create subscribers ################
 
         # this subscriber is used for communicating with the node we created
         # to execute our trajectories.
@@ -169,11 +177,14 @@ class Drawing(Node):
             self.letter_start_pos = Point(x=trans[0], y=trans[1], z=trans[2])
             self.state = State.PLAN_MOVEGROUP
 
-    def moveit_mp_callback(self, msg):
-        self.moveit_mp_queue.append(msg)
+    def moveit_mp_callback(self, request, response):
+
+        self.moveit_mp_queue.append(request)
         self.state = State.PLAN_MOVEGROUP
 
-    def cartesian_mp_callback(self, msg):
+        return response
+
+    def cartesian_mp_callback(self, request, response):
         '''
         Queue a letter to be drawn.
 
@@ -189,31 +200,21 @@ class Drawing(Node):
         msg: the custom message (brain_interfaces/Cartesian.msg)
         '''
 
-        self.letter_start_point.y = msg.start_point.y
-        self.letter_start_point.z = msg.start_point.z
+        self.letter_start_point.y = request.start_point.y
+        self.letter_start_point.z = request.start_point.z
 
-        # queue a move so that the end-effector moves laterally
-        # in front of the position on the whiteboard we'd like to
-        # start drawing the letter. This is very important for
-        # maintaining accuracy.
-        self.cartesian_mp_queue.append([Pose(
-            position=Point(x=self.home_position.position.x,
-                           y=self.letter_start_point.position.y,
-                           z=self.letter_start_point.position.z)
-        )])
-
-        # queue a move to go and touch the board. I picked
-        # 0.5m because it's just a big number. All we need
-        # is to place this point somewhere behind the white-
-        # board.
-        self.cartesian_mp_queue.append([Pose(
-            position=Point(x=self.home_position.position.x + 0.5,
-                           y=self.letter_start_point.position.y,
-                           z=self.letter_start_point.position.z)
-        )])
-
-        self.cartesian_mp_queue.append(msg.poses)
+        self.cartesian_mp_queue.append(request.poses)
         self.state = State.PLAN_CARTESIAN_MOVE
+
+        return response
+
+    def jointstate_mp_callback(self, request, response):
+        self.path_planner.goal_joint_state = request.joint_state
+        self.path_planner.plan_path()
+
+        self.state = State.WAITING
+
+        return response
 
     def get_transform(self, parent_frame, child_frame):
         """
