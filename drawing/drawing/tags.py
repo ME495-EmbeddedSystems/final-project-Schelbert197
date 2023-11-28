@@ -42,14 +42,20 @@ class Grid:
 
     def grid_to_world(self, mode, position):
         if mode == 0:
-            point = (4, position+1)
+            point = (4, position+2)
         if mode == 1:
-            point = (2, position+1)
+            point = (1, position+2)
         if mode == 2:
+            if position == 0:
+                point = (1, 0)
             if position == 1:
-                point = (5, 0)
-            else:
-                point = (position-1, 1)
+                point = (2, 1)
+            if position == 2:
+                point = (2, 0)
+            if position == 3:
+                point = (3, 0)
+            if position == 4:
+                point = (3, 1)
 
         point_x = (point[0])*self.cell_size + self.xrange[0]
         point_y = (point[1])*self.cell_size + self.yrange[0]
@@ -77,7 +83,12 @@ class Tags(Node):
             Empty, 'calibrate', self.calibrate_callback)
         self.where_to_write = self.create_service(
             BoardTiles, 'where_to_write', self.where_to_write_callback)
+        
+        #create publishers
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
+        
+        #create subscribers
+        self.goal_reach_sub = self.create_subscription(String, 'execute_trajectory_status', 10)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -147,7 +158,7 @@ class Tags(Node):
         Trb = self.array_to_transform_matrix(ansT,ansR)
         for i in range(len(request.mode)):
             x,y = self.grid.grid_to_world(request.mode[i], request.position[i])
-            Tbl = Ttb = np.array([[1, 0, 0, x],
+            Tbl = np.array([[1, 0, 0, x],
                                 [0, 1, 0, y],
                                 [0, 0, 1, 0],
                                 [0, 0, 0, 1]])
