@@ -1,5 +1,5 @@
 # Inputs a jointstate where robot needs to go
-std_msgs/String joint_name
-std_msgs/Float64 joint_position
+std_msgs/String[] joint_names
+std_msgs/Float64[] joint_positions
 ---
 # returns Empty
