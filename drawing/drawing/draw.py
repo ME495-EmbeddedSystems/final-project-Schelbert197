@@ -14,14 +14,14 @@ from enum import Enum, auto
 
 from action_msgs.msg import GoalStatus
 
-from brain_interfaces.msg import Cartesian
+from brain_interfaces.srv import Cartesian
 from std_msgs.msg import String, Float32
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-
+from brain_interfaces.srv import MovePose, MoveJointState
 
 class State(Enum):
 
@@ -104,20 +104,20 @@ class Drawing(Node):
         # this service is for the brain node to send singular poses for
         # this node to plan paths using te moveite motion planner
         self.moveit_mp_service = self.create_service(
-            Pose, '/moveit_mp', self.moveit_mp_callback, 10)
+            MovePose, '/moveit_mp', self.moveit_mp_callback)
 
         # this service is for the brain node to send lists of poses for
         # this node to use to plan paths using the cartesian motion
         # planner. It also needs a Point() object, which contains the
         # start position of the letter to be planned.
         self.cartesian_mp_service = self.create_service(
-            Cartesian, '/cartesian_mp', self.cartesian_mp_callback, 10)
+            Cartesian, '/cartesian_mp', self.cartesian_mp_callback)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
         # joint states and the move there.
         self.plan_joint_state_service = self.create_service(
-            JointState, '/jointstate_mp', self.jointstate_mp_callback, 10)
+            MoveJointState, '/jointstate_mp', self.jointstate_mp_callback)
 
         ############# create subscribers ################
 
