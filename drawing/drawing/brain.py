@@ -155,7 +155,7 @@ class Brain(Node):
         if self.state == State.INITIALIZE:
 
             # make a service call to plan a path to the home position
-            self.moveit_mp_client.call_async(self.home_position)
+            await self.moveit_mp_client.call_async(self.home_position)
 
             # Moves to the tag calibration state once the robot has reached the home position
             self.state = State.CALIBRATE
@@ -202,7 +202,7 @@ class Brain(Node):
                     poses=letter_poses, start_point=start_point)
 
                 # make a service call to plan a cartesian path
-                self.cartesian_mp_client.call_async(cartesian_msg)
+                await self.cartesian_mp_client.call_async(cartesian_msg)
 
             # TODO: Will need to add the call to start the OCR before we go to the waiting state
             self.state = State.WAITING
