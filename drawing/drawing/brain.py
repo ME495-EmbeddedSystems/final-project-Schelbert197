@@ -11,6 +11,7 @@ from brain_interfaces.srv import BoardTiles
 from gameplay_interfaces.msg import LetterMsg
 # from character_interfaces.alphabet import alphabet
 from geometry_msgs.msg import Pose, Point, Quaternion
+from sensor_msgs.msg import JointState
 
 from enum import Enum, auto
 
@@ -30,16 +31,31 @@ class Brain(Node):
         super().__init__("Brain")
 
         self.timer_callback_group = MutuallyExclusiveCallbackGroup()
+        self.moveit_mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.cartesian_mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
 
         self.create_timer(0.01, self.timer_callback, self.timer_callback_group)
 
-        # create publishers
+        # create clients
+        # explanation of these services in draw.py
+        self.moveit_mp_client = self.create_client(
+            Pose, '/moveit_mp', callback_group=self.moveit_mp_callback_group)
+        self.cartesian_mp_client = self.create_client(
+            Cartesian, '/cartesian_mp', callback_group=self.cartesian_mp_callback_group)
+        self.jointstate_mp_client = self.create_client(
+            JointState, '/jointstate_mp', callback_group=self.jointstate_mp_callback_group)
 
-        self.moveit_mp_pub = self.create_publisher(
-            Pose, '/moveit_mp', 10)
-
-        self.cartesian_mp_pub = self.create_publisher(
-            Cartesian, '/cartesian_mp', 10)
+        # wait for the services to be available
+        while not self.moveit_mp_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                'moveit_mp service not available, waiting again...')
+        while not self.cartesian_mp_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                'cartesian_mp service not available, waiting again...')
+        while not self.jointstate_mp_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                'jointstate_mp service not available, waiting again...')
 
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
@@ -135,14 +151,11 @@ class Brain(Node):
         else:
             self.state = State.WAITING
 
-    def timer_callback(self):
+    async def timer_callback(self):
         if self.state == State.INITIALIZE:
 
-            # publish the message, draw.py is a subscriber
-            self.moveit_mp_pub.publish(self.home_position)
-
-            # its possible this message is sent too fast, and that draw.py
-            # doesn't receive it, just keep in mind.
+            # make a service call to plan a path to the home position
+            self.moveit_mp_client.call_async(self.home_position)
 
             # Moves to the tag calibration state once the robot has reached the home position
             self.state = State.CALIBRATE
@@ -188,8 +201,8 @@ class Brain(Node):
                 cartesian_msg = Cartesian(
                     poses=letter_poses, start_point=start_point)
 
-                # publish the message, draw.py is a subscriber
-                self.cartesian_mp_pub.publish(cartesian_msg)
+                # make a service call to plan a cartesian path
+                self.cartesian_mp_client.call_async(cartesian_msg)
 
             # TODO: Will need to add the call to start the OCR before we go to the waiting state
             self.state = State.WAITING

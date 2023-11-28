@@ -26,7 +26,8 @@ class Executor(Node):
         self.timer = self.create_timer(0.1, self.timer_callback)
         self.pub = self.create_publisher(
             JointTrajectory, '/panda_arm_controller/joint_trajectory', 10)
-        self.talk_to_draw = self.create_publisher(String, '/chatting', 10)
+        self.execute_trajectory_status_pub = self.create_publisher(
+            String, '/execute_trajectory_status', 10)
         self.sub = self.create_subscription(
             JointTrajectories, '/joint_trajectories', self.joint_trajectories_callback, 10)
         self.force_sub = self.create_subscription(
@@ -72,13 +73,14 @@ class Executor(Node):
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
 
+            msg = String(data="Executing Trajectory!")
+            self.execute_trajectory_status_pub.publish(msg)
+
         # if we've reached the goal, send a message to draw.py that says we're done.
         elif len(self.joint_trajectories) == 0 and self.state == State.PUBLISH:
 
-            msg = String()
-            msg.data = "done"
-
-            self.talk_to_draw.publish(msg)
+            msg = String(data="done")
+            self.execute_trajectory_status_pub.publish(msg)
 
             self.state = State.STOP
 
