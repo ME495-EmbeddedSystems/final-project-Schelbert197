@@ -14,14 +14,14 @@ from enum import Enum, auto
 
 from action_msgs.msg import GoalStatus
 
-from brain_interfaces.srv import Cartesian
 from std_msgs.msg import String, Float32
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState
+from brain_interfaces.srv import MovePose, MoveJointState, Cartesian
+
 
 class State(Enum):
 
@@ -128,7 +128,7 @@ class Drawing(Node):
         # to execute our trajectories.
         self.execute_trajectory_status_sub = self.create_subscription(
             String, '/execute_trajectory_status', self.execute_trajectory_status_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
-        
+
         ############# create publishers ##############
 
         # this publisher is used to send the joint trajectories we plan to our
@@ -227,7 +227,12 @@ class Drawing(Node):
         request: A JointState() message we want to plan a path to.
         response: An empty message.
         '''
-        self.path_planner.goal_joint_state = request.joint_state
+        self.path_planner.goal_joint_state = self.path_planner.current_joint_state
+
+        for i, _ in enumerate(self.path_planner.goal_joint_state.name):
+            if request.joint_name == self.path_planner.goal_joint_state.name[i]:
+                self.path_planner.goal_joint_state.position[i] = request.joint_position
+
         self.path_planner.plan_path()
 
         self.state = State.WAITING
@@ -298,7 +303,7 @@ class Drawing(Node):
             if self.use_fake_hardware:
                 self.state = State.WAITING
                 return
-            
+
             while not self.path_planner.current_joint_state.effort:
                 return
 
