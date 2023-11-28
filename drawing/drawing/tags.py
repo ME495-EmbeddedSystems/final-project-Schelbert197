@@ -19,7 +19,12 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from enum import Enum, auto
+import modern_robotics as mr
 
+class State(Enum):
+    CALIBRATE = auto()
+    OTHER = auto()
 
 class Grid:
     def __init__(self, xrange, yrange, cell_size):
@@ -45,12 +50,12 @@ class Tags(Node):
         self.freq = 200.0
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
-        # self.brick_height = self.get_transform("platform", "brick")[2]
         self.timer = self.create_timer(1 / self.freq, self.timer_callback)
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
         self.grid = Grid((0, 80), (0, 60), 10)
         self.path_planner = Path_Plan_Execute(self)
+        self.state = State.OTHER
 
         # creating services
         self.record_service = self.create_service(
@@ -62,6 +67,15 @@ class Tags(Node):
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
         self.make_transform()
+        
+        #making broadcast between board and robot
+        self.broadcaster = TransformBroadcaster(self)
+        self.robot_board = TransformStamped()
+        self.robot_board.header.frame_id = "panda_link0"
+        self.robot_board.child_frame_id = "board"
+        self.robot_board.header.stamp = self.get_clock().now().to_msg()
+        self.broadcaster.sendTransform(self.robot_board)
+        
 
         # ([0.4705757399661665, -0.7141633025201061, -0.006788132506325206], [-0.07728659290456086, 0.7088900493225068, 0.7007328395121232, -0.021798352185783326])
 
@@ -74,6 +88,7 @@ class Tags(Node):
         self.robot_to_camera.header.stamp = self.get_clock().now().to_msg()
         self.robot_to_camera.header.frame_id = "panda_hand_tcp"
         self.robot_to_camera.child_frame_id = "camera_link"
+  
 
         self.robot_to_camera.transform.translation = Vector3(
             x=0.03524146, y=-0.015, z=-0.043029)
@@ -82,22 +97,27 @@ class Tags(Node):
         # self.get_logger().info(type(self))
         self.tf_static_broadcaster.sendTransform(self.robot_to_camera)
 
+    def matrix_to_position_quaternion(self,matrix):
+        translation = matrix[:3, 3]
+        rotation_matrix = matrix[:3, :3]
 
-    def transform_point(point, transformation_matrix):
-        # Append a 1 to the point to make it homogeneous
-        point_homogeneous = np.append(point, 1)
+        # Convert rotation matrix to quaternion using tf2
+        quaternion = tf.quaternions.mat2quat(rotation_matrix)
 
-        # Apply the transformation matrix to the point
-        transformed_point_homogeneous = np.dot(transformation_matrix, point_homogeneous)
+        # Create Vector3 for position
+        position = Vector3()
+        position.x, position.y, position.z = translation
 
-        # Normalize the homogeneous coordinates
-        transformed_point = transformed_point_homogeneous[:3] / transformed_point_homogeneous[3]
+        # Create Quaternion for rotation
+        rotation = Quaternion()
+        rotation.w,rotation.x, rotation.y, rotation.z = quaternion
 
-        return transformed_point
+        return position, rotation
 
     def array_to_transform_matrix(self, translation, quaternion):
         # Normalize the quaternion
         quaternion /= np.linalg.norm(quaternion)
+        quaternion = [quaternion[3], quaternion[0], quaternion[1],quaternion[2]]
 
         # Create rotation matrix from quaternion
         rotation_matrix = tf.quaternions.quat2mat(quaternion)
@@ -120,21 +140,29 @@ class Tags(Node):
         return response
 
     async def calibrate_callback(self, request, response):
-        ansT, ansR = self.get_transform('panda_link0', 'panda_hand_tcp')
-        self.get_logger().info(f'Tbh: {ansT,ansR}')
-        tags= ["tag11", "tag12", "tag13", "tag14"]
+        ##TODO:move the robot
         
-        # self.path_planner.set_goal_pose(Point(x=0.3091756571687885, y=-0.19003221403590845, z=0.4853135925515006))
-        # self.path_planner.set_goal_orientation(Quaternion(x=0.7014271479691266, y=-0.4789569982144275, z=0.29657513433635807, w=0.43662723191149333))
-        # await self.path_planner.plan_and_execute_path()
-        # if self.path_planner.movegroup_result is not None:
-        for tag in tags:
-            ansT, ansR = self.get_transform('panda_link0', tag)
-            self.get_logger().info(f'T panda0, {tag}: {ansT,ansR}')
-            
-        # Tbh: ([], [])
-        # ([0.350475065643078, -0.636214306408102, 0.09925000881605822], [-0.5744922163820316, 0.577965619924962, -0.3987692152610244, -0.42059190251516054])
-
+        self.state = State.CALIBRATE
+        ansT, ansR = self.get_transform('panda_link0','tag11')
+        self.get_logger().info(f'Trt: {ansT,ansR}')
+        while ansT[0] == 0.0:
+            continue
+        Ttb = np.array([   [1,0,0,0.063],
+                                    [0,1,0,0.063],
+                                    [0,0,1,0],
+                                    [0,0,0,1]]) 
+                # Ttb = np.array([0.063,0.063,0,1])
+        Trt = self.array_to_transform_matrix(ansT,ansR)
+        
+        Trb = Trt @ Ttb
+        self.get_logger().info(f'Trb: \n{Trb}')
+        pos,rotation = self.matrix_to_position_quaternion(Trb)
+        self.get_logger().info(f'Trt: \n{Trt}')
+        self.get_logger().info(f'Trb: \n{Trb}')
+        self.robot_board.transform.translation = pos
+        self.robot_board.transform.rotation = rotation
+        
+        self.get_logger().info(f'Trb: {pos,rotation}')
         return response
 
     def record_callback(self, request, response):
@@ -216,11 +244,8 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     def timer_callback(self):
-        pass
-        # ansT, ansR = self.get_transform('panda_link0', 'panda_hand_tcp')
-        # self.get_logger().info(f'Tbh: {ansT,ansR}')
-        # ansT, ansR = self.get_transform('camera_link', 'tag56')
-        # self.get_logger().info(f'Tca: {ansT,ansR }')
+        self.robot_board.header.stamp = self.get_clock().now().to_msg()
+        self.broadcaster.sendTransform(self.robot_board)
 
 
 def Tags_entry(args=None):
