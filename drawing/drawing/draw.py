@@ -89,7 +89,10 @@ class Drawing(Node):
         self.joint_names = []
         self.joint_pos = []
         self.timer_callback_group = MutuallyExclusiveCallbackGroup()
-        self.chatting_callback_group = MutuallyExclusiveCallbackGroup()
+        self.moveit_mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.cartesian_mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
             0.01, self.timer_callback, callback_group=self.timer_callback_group)
 
@@ -104,28 +107,28 @@ class Drawing(Node):
         # this service is for the brain node to send singular poses for
         # this node to plan paths using te moveite motion planner
         self.moveit_mp_service = self.create_service(
-            MovePose, '/moveit_mp', self.moveit_mp_callback)
+            MovePose, '/moveit_mp', self.moveit_mp_callback, callback_group=self.moveit_mp_callback_group)
 
         # this service is for the brain node to send lists of poses for
         # this node to use to plan paths using the cartesian motion
         # planner. It also needs a Point() object, which contains the
         # start position of the letter to be planned.
         self.cartesian_mp_service = self.create_service(
-            Cartesian, '/cartesian_mp', self.cartesian_mp_callback)
+            Cartesian, '/cartesian_mp', self.cartesian_mp_callback, callback_group=self.cartesian_mp_callback_group)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
         # joint states and the move there.
         self.plan_joint_state_service = self.create_service(
-            MoveJointState, '/jointstate_mp', self.jointstate_mp_callback)
+            MoveJointState, '/jointstate_mp', self.jointstate_mp_callback, callback_group=self.jointstate_mp_callback_group)
 
         ############# create subscribers ################
 
         # this subscriber is used for communicating with the node we created
         # to execute our trajectories.
-        self.chatting_sub = self.create_subscription(
-            String, '/chatting', self.chatting_callback, 10, callback_group=self.chatting_callback_group)
-
+        self.execute_trajectory_status_sub = self.create_subscription(
+            String, '/execute_trajectory_status', self.execute_trajectory_status_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
+        
         ############# create publishers ##############
 
         # this publisher is used to send the joint trajectories we plan to our
@@ -164,7 +167,7 @@ class Drawing(Node):
 
         self.prev_state = State.STOP
 
-    def chatting_callback(self, msg):
+    def execute_trajectory_status_callback(self, msg):
 
         # the "done" message signifies that the trajectory execution node has finished
         # executing the trajectory it was assigned. Once this happens, we should go back
@@ -209,6 +212,21 @@ class Drawing(Node):
         return response
 
     def jointstate_mp_callback(self, request, response):
+        '''
+        Queue a JointState to be planned for.
+
+        When the jointstate_mp service receives a service call,
+        this function will set the goal_joint_state to the joint_state
+        from the service call directly, instead of using a Pose() message
+        with the compute_ik service like the moveit motion planner.
+        Once this JointState is planned for, it will be immediately
+        executed.
+
+        Args:
+        ----
+        request: A JointState() message we want to plan a path to.
+        response: An empty message.
+        '''
         self.path_planner.goal_joint_state = request.joint_state
         self.path_planner.plan_path()
 
@@ -222,12 +240,12 @@ class Drawing(Node):
 
         Args:
         ----
-            parent_frame (string): name of parent frame
-            child_frame (string): name of child frame
+        parent_frame (string): name of parent frame
+        child_frame (string): name of child frame
 
         Returns
         -------
-            brick_to_platform: the x,y,z of the translational transform
+        brick_to_platform: the x,y,z of the translational transform
 
         """
         try:
@@ -279,6 +297,9 @@ class Drawing(Node):
                 f"self.use_fake_hardware: {self.use_fake_hardware}")
             if self.use_fake_hardware:
                 self.state = State.WAITING
+                return
+            
+            while not self.path_planner.current_joint_state.effort:
                 return
 
             calibration_cycles = 100

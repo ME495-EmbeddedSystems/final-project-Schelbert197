@@ -15,7 +15,7 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
 # from scipy.spatial.transform import Rotation
-# from brain_interfaces.srv  import BoardTiles
+from brain_interfaces.srv  import BoardTiles
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -62,7 +62,7 @@ class Tags(Node):
             Empty, 'record_transform', self.record_callback)
         self.calibrate_service = self.create_service(
             Empty, 'calibrate', self.calibrate_callback)
-        self.where_to_write = self.create_service(Empty,'where_to_write',self.where_to_write_callback)
+        self.where_to_write = self.create_service(BoardTiles,'where_to_write',self.where_to_write_callback)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -146,7 +146,9 @@ class Tags(Node):
         ansT, ansR = self.get_transform('panda_link0','tag11')
         self.get_logger().info(f'Trt: {ansT,ansR}')
         while ansT[0] == 0.0:
-            continue
+            ansT, ansR = self.get_transform('panda_link0','tag11')
+            self.get_logger().info(f'Trt: {ansT,ansR}')
+
         Ttb = np.array([   [1,0,0,0.063],
                                     [0,1,0,0.063],
                                     [0,0,1,0],
