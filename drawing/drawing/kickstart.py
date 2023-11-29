@@ -8,6 +8,7 @@ from sensor_msgs.msg import JointState
 from path_planner.path_plan_execute import Path_Plan_Execute
 from character_interfaces.alphabet import alphabet
 from joint_interfaces.msg import JointTrajectories
+from brain_interfaces.srv import BoardTiles
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
@@ -46,7 +47,7 @@ class Kickstart(Node):
         # with the list of points, create trajectories --> list of Poses (graham's code)
 
         # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
-        
+
         # use graham's code to queue each component and draw (draw.py)
         
         return response
