@@ -18,7 +18,7 @@ from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles
+from brain_interfaces.srv import BoardTiles, MoveJointState
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -77,6 +77,7 @@ class Tags(Node):
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
+        self.move_js_callback_group = MutuallyExclusiveCallbackGroup()
 
         # creating services
         self.record_service = self.create_service(
@@ -85,13 +86,19 @@ class Tags(Node):
             Empty, 'calibrate', self.calibrate_callback)
         self.where_to_write = self.create_service(
             BoardTiles, 'where_to_write', self.where_to_write_callback)
-        
-        #create publishers
+
+        # create publishers
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
-        
-        #create subscribers
-        self.goal_reach_sub = self.create_subscription(String, 'execute_trajectory_status', self.goal_reach_sub_callback,10, callback_group=self.execute_trajectory_status_callback_group)
+
+        # create subscribers
+        self.goal_reach_sub = self.create_subscription(
+            String, 'execute_trajectory_status', self.goal_reach_sub_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
         self.goal_state = "not"
+
+        # create client
+        self.move_js_client = self.create_client(
+            MoveJointState, 'jointstate_mp', callback_group=self.move_js_callback_group)
+
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
         self.make_transform()
@@ -104,10 +111,15 @@ class Tags(Node):
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
 
-        # ([0.4705757399661665, -0.7141633025201061, -0.006788132506325206], [-0.07728659290456086, 0.7088900493225068, 0.7007328395121232, -0.021798352185783326])
-    def goal_reach_sub_callback(self,msg):
+        # wait for services
+        while not self.move_js_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                'Move Joint State service not available, waiting again...')
+
+    def goal_reach_sub_callback(self, msg):
         if msg == "done":
             self.goal_state = "done"
+
     def make_transform(self):
 
         self.robot_to_camera = TransformStamped()
@@ -159,28 +171,28 @@ class Tags(Node):
         response = []
         pos = Pose()
         ansT, ansR = self.get_transform('panda_link0', 'board')
-        Trb = self.array_to_transform_matrix(ansT,ansR)
-        lx,ly = self.grid.grid_to_world(request.mode, request.position)
+        Trb = self.array_to_transform_matrix(ansT, ansR)
+        lx, ly = self.grid.grid_to_world(request.mode, request.position)
         Tbl = np.array([[1, 0, 0, lx],
                         [0, 1, 0, ly],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
-        
+
         for i in range(len(request.x)):
-            x,y = self.grid.grid_to_world(request.x[i], request.y[i])
+            x, y = request.x[i], request.y[i]
+            z = 0.15 if request.onboard[i] else 0.03
             Tla = np.array([[0, 1, 0, x],
                             [1, 0, 0, y],
-                            [0, 0, -1, 0.1],
+                            [0, 0, -1, z],
                             [0, 0, 0, 1]])
             Tra = Trl @ Tla
             position, rotation = self.matrix_to_position_quaternion(Tra)
             pos.position = position
             pos.orientation = rotation
-            
+
             response.append(pos)
-            
-            
+
         return response
 
     async def calibrate_callback(self, request, response):
@@ -266,17 +278,20 @@ class Tags(Node):
             self.get_logger().info(f"Extrapolation exception: {e}")
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
-    def timer_callback(self):
+    async def timer_callback(self):
         msg = String()
 
         if self.state == State.CALIBRATE:
             # TODO: goto jointstate if reached then do this stuff
-            
-            
-            
+            goal_js = MoveJointState()
+            goal_js.joint_names = ["panda_joint4",
+                                   "panda_joint5", "panda_joint7"]
+            goal_js.joint_positions = [-2.61799, -1.22173, 2.11185]
+            await self.move_js_client.call_async(goal_js)
+
             ansT, ansR = self.get_transform('panda_link0', 'tag11')
             msg.data = "CALIBRATING"
-            if ansT[0] != 0.0 and self.goal_state=="done":
+            if ansT[0] != 0.0 and self.goal_state == "done":
                 Ttb = np.array([[1, 0, 0, 0.063],
                                 [0, 1, 0, 0.063],
                                 [0, 0, 1, 0],
