@@ -47,8 +47,8 @@ class Executor(Node):
         self.get_logger().info("message received!")
 
         self.joint_trajectories += msg.joint_trajectories
-        # self.get_logger().info(
-        #     f"joint_trajectories: {self.joint_trajectories}")
+        self.get_logger().info(
+            f"joint_trajectories: {self.joint_trajectories}")
         self.clear = msg.clear
 
         if msg.state == "publish":

@@ -294,7 +294,7 @@ class Path_Plan_Execute():
 
         # leave the commented out lines below here for now
         # they may come in handy later as we continue to debug
-        self.cartesian_path_request.group_name = self.node.group_name
+        self.cartesian_path_request.plgroup_name = self.node.group_name
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
         # setting this to 0.1 for now, could cause problems later
@@ -405,6 +405,8 @@ class Path_Plan_Execute():
     def execute_individual_trajectories(self):
 
         joint_trajectories = []
+        
+        self.node.get_logger().info(f"planned trajectory: {self.planned_trajectory}")
 
         for point in self.planned_trajectory.joint_trajectory.points:
             temp = JointTrajectoryPoint()

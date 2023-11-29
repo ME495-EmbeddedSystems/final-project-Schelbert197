@@ -113,7 +113,7 @@ class Tags(Node):
 
         # wait for services
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info(
+            self.get_logger().info(
                 'Move Joint State service not available, waiting again...')
 
     def goal_reach_sub_callback(self, msg):
@@ -134,7 +134,7 @@ class Tags(Node):
         # self.get_logger().info(type(self))
         self.tf_static_broadcaster.sendTransform(self.robot_to_camera)
 
-    def matrix_to_position_quaternion(self, matrix):
+    def matrix_to_position_quaternion(self, matrix, point = 0):
         translation = matrix[:3, 3]
         rotation_matrix = matrix[:3, :3]
 
@@ -142,7 +142,10 @@ class Tags(Node):
         quaternion = tf.quaternions.mat2quat(rotation_matrix)
 
         # Create Vector3 for position
-        position = Vector3()
+        if point == 0:
+            position = Vector3()
+        elif point == 1:
+            position = Point()
         position.x, position.y, position.z = translation
 
         # Create Quaternion for rotation
@@ -168,8 +171,10 @@ class Tags(Node):
         return transform_matrix
 
     async def where_to_write_callback(self, request, response):
-        response = []
+        self.get_logger().info("where_to_write1")
+        response_a = []
         pos = Pose()
+        self.get_logger().info("where_to_write2")
         ansT, ansR = self.get_transform('panda_link0', 'board')
         Trb = self.array_to_transform_matrix(ansT, ansR)
         lx, ly = self.grid.grid_to_world(request.mode, request.position)
@@ -187,12 +192,13 @@ class Tags(Node):
                             [0, 0, -1, z],
                             [0, 0, 0, 1]])
             Tra = Trl @ Tla
-            position, rotation = self.matrix_to_position_quaternion(Tra)
+            position, rotation = self.matrix_to_position_quaternion(Tra,1)
             pos.position = position
             pos.orientation = rotation
 
-            response.append(pos)
-
+            response_a.append(pos)
+        self.get_logger().info("where_to_write3")
+        response.origin_pose = response_a
         return response
 
     async def calibrate_callback(self, request, response):
@@ -200,8 +206,8 @@ class Tags(Node):
         goal_js = MoveJointState.Request()
         goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
         goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
-        await self.move_js_client.call_async(goal_js)
-
+        ans = await self.move_js_client.call_async(goal_js)
+        self.get_logger().info("calibrate")
         return response
 
     def record_callback(self, request, response):
@@ -284,7 +290,7 @@ class Tags(Node):
 
     async def timer_callback(self):
         msg = String()
-
+        # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE:
             # TODO: goto jointstate if reached then do this stuff
         
@@ -292,7 +298,8 @@ class Tags(Node):
 
             ansT, ansR = self.get_transform('panda_link0', 'tag11')
             msg.data = "CALIBRATING"
-            if ansT[0] != 0.0 and self.goal_state == "done":
+            # if ansT[0] != 0.0 and self.goal_state == "done":
+            if ansT[0] != 0.0 :
                 Ttb = np.array([[1, 0, 0, 0.063],
                                 [0, 1, 0, 0.063],
                                 [0, 0, 1, 0],

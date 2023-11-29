@@ -228,13 +228,13 @@ class Drawing(Node):
         response: An empty message.
         '''
         joints_to_move = list(zip(request.joint_names, request.joint_positions))
-
+        # N = len(joints_to_move)
         self.path_planner.goal_joint_state = self.path_planner.current_joint_state
 
         # while joints_to_move:
-        for i in range(len(self.path_planner.goal_joint_state.name)-2):
-            self.get_logger().info(f'{ self.path_planner.goal_joint_state.name[i]} 1')
-            self.get_logger().info(f'{joints_to_move[0]} 2')
+        for i in range(len(self.path_planner.goal_joint_state.name)):
+            # self.get_logger().info(f'{ self.path_planner.goal_joint_state.name[i]} 1')ointTrajectory(head
+            # self.get_logger().info(f'{joints_to_move[0]} 2')
             if len(joints_to_move)>0:
                 if joints_to_move[0][0] == self.path_planner.goal_joint_state.name[i]:
                     self.path_planner.goal_joint_state.position[i] = joints_to_move[0][1]

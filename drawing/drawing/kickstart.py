@@ -43,21 +43,21 @@ class Kickstart(Node):
         self.mp_callback_group = MutuallyExclusiveCallbackGroup()
 
         # create service clients
-        self.cal_client = self.create_client(Empty,'calibrate_service',callback_group=self.cal_callback_group)
+        self.cal_client = self.create_client(Empty,'calibrate',callback_group=self.cal_callback_group)
         self.tile_client = self.create_client(BoardTiles,'where_to_write',callback_group=self.tile_callback_group)
         self.movemp_client = self.create_client(MovePose,'/moveit_mp',callback_group=self.mp_callback_group)
 
         # wait for clients' services to be available
-        while not self.cal_callback_group.wait_for_service(timeout_sec=1.0):
+        while not self.cal_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Calibrate service not available, waiting...')
-        while not self.tile_callback_group.wait_for_service(timeout_sec=1.0):
+        while not self.tile_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Where to Write service not available, waiting...')
-        while not self.mp_callback_group.wait_for_service(timeout_sec=1.0):
+        while not self.movemp_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Move It MP service not available, waiting...')
 
     async def kickstart_callback(self, request, response):
         # calibrate once -- call Ananya's stuff
-        await self.cal_client.call_async()
+        await self.cal_client.call_async(request=Empty.Request())
 
         # QUEUE EACH SECTION OF GAME SETUP - INCORRECT LETTERS, CORRECT LETTERS, HANGMAN STAND
 
@@ -73,8 +73,11 @@ class Kickstart(Node):
 
         pose_list = await self.tile_client.call_async(request)
         # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
-        for pose in pose_list:
-            await self.movemp_client.call_async(pose)
+        for pose in pose_list.origin_pose:
+            self.get_logger().info(f'{pose}')
+            request2 = MovePose.Request()
+            request2.target_pose = pose
+            await self.movemp_client.call_async(request2)
 
         # DASH 2:
         # request = BoardTiles()
