@@ -64,7 +64,7 @@ class Kickstart(Node):
         # set up position for each component (list of Mode and positions)
         ############# list for BoardTiles of incorrect letter dashes ##############
         # DASH 1:
-        request = BoardTiles()
+        request = BoardTiles.Request()
         request.mode = 0
         request.position = 0
         request.x = [0.01,0.05,0.09,0.09]
