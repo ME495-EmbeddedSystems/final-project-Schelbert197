@@ -2,8 +2,8 @@
 # position refers to the array position of the tile (for the hangman, this is order of writing)
 int64 mode
 int64 position
-int64[] x
-int64[] y
+float64[] x
+float64[] y
 ---
 # returns a Pose
 geometry_msgs/Pose[] origin_pose
