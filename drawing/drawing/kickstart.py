@@ -56,27 +56,33 @@ class Kickstart(Node):
             self.get_logger().info('Move It MP service not available, waiting...')
 
     async def kickstart_callback(self, request, response):
-        ##### PUT THIS IN THE KICKSTART SERVICE CALLBACK
         # calibrate once -- call Ananya's stuff
         await self.cal_client.call_async()
+
+        # QUEUE EACH SECTION OF GAME SETUP - INCORRECT LETTERS, CORRECT LETTERS, HANGMAN STAND
 
         # set up position for each component (list of Mode and positions)
         ############# list for BoardTiles of incorrect letter dashes ##############
         request = BoardTiles()
         request.mode = 0
         request.position = 0
-        request.x = [0.01,0.05,0.09]
-        request.y = [0.0,0.0,0.0]
+        request.x = [0.01,0.05,0.09,0.09]
+        request.y = [0.0,0.0,0.0,0.0]
+        request.onboard = [True,True,True,False]
 
         pose_list = await self.tile_client.call_async(request)
-
-        # Use moveit_mp service to convert list of Poses to robot motions
+        # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
         for pose in pose_list:
             await self.movemp_client.call_async(pose)
-
+        
         # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
 
-        # use graham's code to queue each component and draw (draw.py)
+        # use graham's code to queue each section of components 
         
         return response
 
+def main(args=None):
+    rclpy.init(args=args)
+    node = Kickstart()
+    rclpy.spin(node)
+    rclpy.shutdown()
