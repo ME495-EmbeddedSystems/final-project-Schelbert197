@@ -33,20 +33,21 @@ class Kickstart(Node):
         super().__init__("kickstart")
         
         # create kickstart service
-        self.kickstart_service = self.create_service(Empty, '')
-        
+        self.kickstart_service = self.create_service(Empty, 'kickstart_service',self.kickstart_callback)
+        self.create_service()
         
 
-
+    def kickstart_callback(self, request, response):
         ##### PUT THIS IN THE KICKSTART SERVICE CALLBACK
         # calibrate once -- call Ananya's stuff
 
         # set up position for each component (list of Mode and positions)
-
+        
         # with the list of points, create trajectories --> list of Poses (graham's code)
 
         # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
-
+        
         # use graham's code to queue each component and draw (draw.py)
         
+        return response
 
