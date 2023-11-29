@@ -1,7 +1,9 @@
 # mode refers to 0 (wrong answer), 1 (right answer), 2 (drawing man)
 # position refers to the array position of the tile (for the hangman, this is order of writing)
-int64[] mode
-int64[] position
+int64 mode
+int64 position
+int64[] x
+int64[] y
 ---
 # returns a Pose
 geometry_msgs/Pose[] origin_pose

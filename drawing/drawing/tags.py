@@ -160,14 +160,21 @@ class Tags(Node):
         pos = Pose()
         ansT, ansR = self.get_transform('panda_link0', 'board')
         Trb = self.array_to_transform_matrix(ansT,ansR)
-        for i in range(len(request.mode)):
-            x,y = self.grid.grid_to_world(request.mode[i], request.position[i])
-            Tbl = np.array([[1, 0, 0, x],
-                                [0, 1, 0, y],
-                                [0, 0, 1, 0],
-                                [0, 0, 0, 1]])
-            Trl = Trb @ Tbl
-            position, rotation = self.matrix_to_position_quaternion(Trl)
+        lx,ly = self.grid.grid_to_world(request.mode, request.position)
+        Tbl = np.array([[1, 0, 0, lx],
+                        [0, 1, 0, ly],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+        Trl = Trb @ Tbl
+        
+        for i in range(len(request.x)):
+            x,y = self.grid.grid_to_world(request.x[i], request.y[i])
+            Tla = np.array([[0, 1, 0, x],
+                            [1, 0, 0, y],
+                            [0, 0, -1, 0.1],
+                            [0, 0, 0, 1]])
+            Tra = Trl @ Tla
+            position, rotation = self.matrix_to_position_quaternion(Tra)
             pos.position = position
             pos.orientation = rotation
             
