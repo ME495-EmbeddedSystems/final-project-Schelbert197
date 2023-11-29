@@ -24,9 +24,9 @@ class ImageModification(Node):
         """Convert image to opencv format"""
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
         cv2.imshow("image", self.frame)
-        gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
-        cv2.imshow("gray", gray)
-        img_publish = self.cv_bridge.cv2_to_imgmsg(gray)
+        # gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+        # cv2.imshow("gray", gray)
+        img_publish = self.cv_bridge.cv2_to_imgmsg(self.frame)
         self.modified_image_publish.publish(img_publish)
         cv2.waitKey(1)
 
