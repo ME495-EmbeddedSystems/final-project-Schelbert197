@@ -159,7 +159,7 @@ class Brain(Node):
 
         elif self.state == State.SETUP:
 
-            # TODO: Add the client/action for the robot to draw the noose and the dashes
+            # TODO: Ishani add the client/action for the robot to draw the noose and the dashes
             self.setup_client()
 
             # Moves to the waiting state once we are setup, and waits for something to happen from hangman.py
