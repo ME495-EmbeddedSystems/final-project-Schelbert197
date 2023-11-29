@@ -16,6 +16,7 @@ from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
 from brain_interfaces.srv import BoardTiles
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
@@ -75,6 +76,7 @@ class Tags(Node):
         self.grid = Grid((0, 80), (0, 60), 10)
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
+        self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
 
         # creating services
         self.record_service = self.create_service(
@@ -88,8 +90,8 @@ class Tags(Node):
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
         
         #create subscribers
-        self.goal_reach_sub = self.create_subscription(String, 'execute_trajectory_status', 10)
-
+        self.goal_reach_sub = self.create_subscription(String, 'execute_trajectory_status', self.goal_reach_sub_callback,10, callback_group=self.execute_trajectory_status_callback_group)
+        self.goal_state = "not"
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
         self.make_transform()
@@ -103,7 +105,9 @@ class Tags(Node):
         self.broadcaster.sendTransform(self.robot_board)
 
         # ([0.4705757399661665, -0.7141633025201061, -0.006788132506325206], [-0.07728659290456086, 0.7088900493225068, 0.7007328395121232, -0.021798352185783326])
-
+    def goal_reach_sub_callback(self,msg):
+        if msg == "done":
+            self.goal_state = "done"
     def make_transform(self):
 
         self.robot_to_camera = TransformStamped()
@@ -260,9 +264,12 @@ class Tags(Node):
 
         if self.state == State.CALIBRATE:
             # TODO: goto jointstate if reached then do this stuff
+            
+            
+            
             ansT, ansR = self.get_transform('panda_link0', 'tag11')
             msg.data = "CALIBRATING"
-            if ansT[0] != 0.0:
+            if ansT[0] != 0.0 and self.goal_state=="done":
                 Ttb = np.array([[1, 0, 0, 0.063],
                                 [0, 1, 0, 0.063],
                                 [0, 0, 1, 0],
@@ -278,6 +285,7 @@ class Tags(Node):
                 self.robot_board.transform.translation = pos
                 self.robot_board.transform.rotation = rotation
                 self.state = State.OTHER
+                self.goal_state = "not"
                 self.get_logger().info(f'Trb: {pos,rotation}')
 
         if self.state == State.OTHER:
