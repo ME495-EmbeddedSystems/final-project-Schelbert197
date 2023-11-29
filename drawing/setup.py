@@ -33,6 +33,7 @@ setup(
             "draw = drawing.draw:main",
             "executor = drawing.send_trajectories:main",
             "tags = drawing.tags:Tags_entry",
+            "kickstart = drawing.kickstart:main",
         ],
     },
 )
