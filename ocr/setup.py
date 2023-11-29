@@ -22,7 +22,8 @@ setup(
         'console_scripts': [
             "ocr = ocr.ocr:main",
             "hangman = ocr.hangman:main",
-            "image_modification = ocr.image_modification:main"
+            "image_modification = ocr.image_modification:main",
+            "paddle_ocr = ocr.paddle_ocr:main"
         ],
     },
 )

@@ -17,10 +17,17 @@ class ImageModification(Node):
         # create subscriber to get image
         self.cap = self.create_subscription(Image, "camera/color/image_raw", self.image_modification, qos_profile=10)
 
+        # create publisher to publish modified image
+        self.modified_image_publish = self.create_publisher(Image, "modified_image", 10)
+
     def image_modification(self, msg):
         """Convert image to opencv format"""
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
         cv2.imshow("image", self.frame)
+        gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+        cv2.imshow("gray", gray)
+        img_publish = self.cv_bridge.cv2_to_imgmsg(gray)
+        self.modified_image_publish.publish(img_publish)
         cv2.waitKey(1)
 
 
