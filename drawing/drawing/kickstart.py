@@ -77,17 +77,17 @@ class Kickstart(Node):
             await self.movemp_client.call_async(pose)
 
         # DASH 2:
-        request = BoardTiles()
-        request.mode = 0
-        request.position = 1
-        request.x = [0.01,0.05,0.09,0.09]
-        request.y = [0.0,0.0,0.0,0.0]
-        request.onboard = [True,True,True,False]
+        # request = BoardTiles()
+        # request.mode = 0
+        # request.position = 1
+        # request.x = [0.01,0.05,0.09,0.09]
+        # request.y = [0.0,0.0,0.0,0.0]
+        # request.onboard = [True,True,True,False]
 
-        pose_list = await self.tile_client.call_async(request)
-        # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
-        for pose in pose_list:
-            await self.movemp_client.call_async(pose)
+        # pose_list = await self.tile_client.call_async(request)
+        # # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
+        # for pose in pose_list:
+        #     await self.movemp_client.call_async(pose)
 
         # DASH 3:
         # request = BoardTiles()
