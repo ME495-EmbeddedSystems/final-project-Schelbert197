@@ -227,13 +227,17 @@ class Drawing(Node):
         request: A JointState() message we want to plan a path to.
         response: An empty message.
         '''
-        joints_to_move = request.joint_names
+        joints_to_move = list(zip(request.joint_names, request.joint_positions))
+
         self.path_planner.goal_joint_state = self.path_planner.current_joint_state
 
-        while joints_to_move:
-            for i, _ in enumerate(self.path_planner.goal_joint_state.name):
-                if joints_to_move[0] == self.path_planner.goal_joint_state.name[i]:
-                    self.path_planner.goal_joint_state.position[i] = request.joint_positions[0]
+        # while joints_to_move:
+        for i in range(len(self.path_planner.goal_joint_state.name)-2):
+            self.get_logger().info(f'{ self.path_planner.goal_joint_state.name[i]} 1')
+            self.get_logger().info(f'{joints_to_move[0]} 2')
+            if len(joints_to_move)>0:
+                if joints_to_move[0][0] == self.path_planner.goal_joint_state.name[i]:
+                    self.path_planner.goal_joint_state.position[i] = joints_to_move[0][1]
                     joints_to_move.pop(0)
 
         self.path_planner.plan_path()

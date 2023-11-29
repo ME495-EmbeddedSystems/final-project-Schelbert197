@@ -197,6 +197,10 @@ class Tags(Node):
 
     async def calibrate_callback(self, request, response):
         self.state = State.CALIBRATE
+        goal_js = MoveJointState.Request()
+        goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
+        goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
+        await self.move_js_client.call_async(goal_js)
 
         return response
 
@@ -283,11 +287,8 @@ class Tags(Node):
 
         if self.state == State.CALIBRATE:
             # TODO: goto jointstate if reached then do this stuff
-            goal_js = MoveJointState()
-            goal_js.joint_names = ["panda_joint4",
-                                   "panda_joint5", "panda_joint7"]
-            goal_js.joint_positions = [-2.61799, -1.22173, 2.11185]
-            await self.move_js_client.call_async(goal_js)
+        
+            
 
             ansT, ansR = self.get_transform('panda_link0', 'tag11')
             msg.data = "CALIBRATING"
