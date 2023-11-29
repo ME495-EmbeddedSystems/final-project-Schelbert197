@@ -1,4 +1,5 @@
 # Inputs a jointstate where robot needs to go
-sensor_msgs/JointState target_jointstate
+std_msgs/String[] joint_names
+std_msgs/Float64[] joint_positions
 ---
 # returns Empty
