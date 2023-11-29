@@ -33,8 +33,8 @@ class Tesseract_Ocr(Node):
 
     def ocr_func(self, frame):
         """Run OCR on the image frame"""
-        config = ("-l eng --oem 1 --psm 10")
-        result = pytesseract.image_to_string(frame, config=config)
+        config = ("--oem 3 --psm 10")
+        result = pytesseract.image_to_string(frame,'eng',config=config)
         # if result[0] != None:
         #     self.guess_verification(result)
         print(result)

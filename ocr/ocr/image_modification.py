@@ -24,9 +24,16 @@ class ImageModification(Node):
         """Convert image to opencv format"""
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
         cv2.imshow("image", self.frame)
-        # gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
         # cv2.imshow("gray", gray)
-        img_publish = self.cv_bridge.cv2_to_imgmsg(self.frame)
+
+        blurred = cv2.GaussianBlur(gray, (11, 11), 0)
+        # cv2.imshow("blurred", blurred)
+
+        ret3,th3 = cv2.threshold(blurred,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        cv2.imshow("binarized", th3)
+
+        img_publish = self.cv_bridge.cv2_to_imgmsg(th3)
         self.modified_image_publish.publish(img_publish)
         cv2.waitKey(1)
 
