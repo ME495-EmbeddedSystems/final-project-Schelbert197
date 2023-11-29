@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from std_srvs.srv import Empty
 from geometry_msgs.msg import Point, Quaternion, Pose
@@ -8,7 +9,7 @@ from sensor_msgs.msg import JointState
 from path_planner.path_plan_execute import Path_Plan_Execute
 from character_interfaces.alphabet import alphabet
 from joint_interfaces.msg import JointTrajectories
-from brain_interfaces.srv import BoardTiles
+from brain_interfaces.srv import BoardTiles, MovePose
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
@@ -35,16 +36,43 @@ class Kickstart(Node):
         
         # create kickstart service
         self.kickstart_service = self.create_service(Empty, 'kickstart_service',self.kickstart_callback)
-        self.create_service()
         
+        # create mutually exclusive callback groups
+        self.cal_callback_group = MutuallyExclusiveCallbackGroup()
+        self.tile_callback_group = MutuallyExclusiveCallbackGroup()
+        self.mp_callback_group = MutuallyExclusiveCallbackGroup()
 
-    def kickstart_callback(self, request, response):
+        # create service clients
+        self.cal_client = self.create_client(Empty,'calibrate_service',callback_group=self.cal_callback_group)
+        self.tile_client = self.create_client(BoardTiles,'where_to_write',callback_group=self.tile_callback_group)
+        self.movemp_client = self.create_client(MovePose,'/moveit_mp',callback_group=self.mp_callback_group)
+
+        # wait for clients' services to be available
+        while not self.cal_callback_group.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Calibrate service not available, waiting...')
+        while not self.tile_callback_group.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Where to Write service not available, waiting...')
+        while not self.mp_callback_group.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Move It MP service not available, waiting...')
+
+    async def kickstart_callback(self, request, response):
         ##### PUT THIS IN THE KICKSTART SERVICE CALLBACK
         # calibrate once -- call Ananya's stuff
+        await self.cal_client.call_async()
 
         # set up position for each component (list of Mode and positions)
-        
-        # with the list of points, create trajectories --> list of Poses (graham's code)
+        ############# list for BoardTiles of incorrect letter dashes ##############
+        request = BoardTiles()
+        request.mode = 0
+        request.position = 0
+        request.x = [0.01,0.05,0.09]
+        request.y = [0.0,0.0,0.0]
+
+        pose_list = await self.tile_client.call_async(request)
+
+        # Use moveit_mp service to convert list of Poses to robot motions
+        for pose in pose_list:
+            await self.movemp_client.call_async(pose)
 
         # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
 
