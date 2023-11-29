@@ -4,6 +4,7 @@ int64 mode
 int64 position
 float64[] x
 float64[] y
+bool[] onboard
 ---
 # returns a Pose
 geometry_msgs/Pose[] origin_pose
