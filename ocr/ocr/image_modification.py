@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 import numpy as np
+import imutils
 
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -38,9 +39,11 @@ class ImageModification(Node):
         kernel = np.ones((17,17),np.uint8)
         dilation = cv2.dilate(th3,kernel,iterations = 1)
         inverted_image = cv2.bitwise_not(dilation)
-        cv2.imshow("inverted_image", inverted_image)
+        # cv2.imshow("inverted_image", inverted_image)
+        resized_image = imutils.resize(inverted_image, width=500, height=500)
+        cv2.imshow("resized_image", resized_image)
 
-        img_publish = self.cv_bridge.cv2_to_imgmsg(inverted_image)
+        img_publish = self.cv_bridge.cv2_to_imgmsg(self.frame)
         self.modified_image_publish.publish(img_publish)
         cv2.waitKey(1)
 
