@@ -19,9 +19,9 @@ import numpy as np
 class State(Enum):
     INITIALIZE = auto(),
     CALIBRATE = auto(),
-    SETUP = auto(),
+    APPROACHING = auto(),
     WAITING = auto(),
-    READING = auto(),
+    WRITING = auto(),
     LETTER = auto()
 
 
@@ -152,6 +152,28 @@ class Brain(Node):
                 point_pose = Pose(position=p, orientation=quat)
             poses.append(point_pose)
 
+    def process_letter_points(self, letter):
+        """ Function to make it easier to prepare letters for board tile type"""
+        xcoord = self.alphabet[letter]['xlist']
+        ycoord = self.alphabet[letter]['ylist']
+        board_x = []
+        board_y = []
+        board_bool = []
+        for i in range(0, len(xcoord)):
+            if not (0.0001 > xcoord[i] > -0.0001) or not (0.0001 > ycoord[i] > 0.0001):
+                board_x.append(xcoord[i])
+                board_y.append(ycoord[i])
+                board_bool.append(True)
+            elif i != len(xcoord):
+                board_x.append(xcoord[i+1])
+                board_y.append(ycoord[i+1])
+                board_bool.append(False)
+            else:
+                board_x.append(xcoord[i])
+                board_y.append(ycoord[i])
+                board_bool.append(False)
+        return board_x, board_y, board_bool
+
     def test_service_callback(self, request, response):
 
         self.state = State.LETTER
@@ -166,43 +188,52 @@ class Brain(Node):
 
         # establishes a global message variable for the duration of the letter state
         self.last_message = msg
-        # switches to letter
-        self.state = State.LETTER
+
+        shape_list = []
+        for i in range (0,len(self.last_message.positions)):
+            tile_origin = BoardTiles()
+            tile_origin.mode = self.last_message.mode[i]
+            tile_origin.position = self.last_message.positions[i]
+            
+            # get x, y, onboard values
+            tile_origin.x, tile_origin.y, tile_origin.onboard = self.process_letter_points(self.last_message.letters[i])
+            shape_list.append(tile_origin)
+
+        # switches to calibrate state
+        self.state = State.CALIBRATE
 
     def home_callback(self, msg: Bool):
         """Callback for whether or not the robot has returned to home after writing"""
         if msg == True:
             self.ocr_pub.publish(True)
-            self.state = State.READING
+            self.state = State.WRITING
         else:
             self.state = State.WAITING
 
     def timer_callback(self):
         if self.state == State.INITIALIZE:
 
-            # publish the message, draw.py is a subscriber
-            self.moveit_mp_pub.publish(self.home_position)
+            self.kick_future = self.kickstart_service_client.call(Empty)
 
-            # its possible this message is sent too fast, and that draw.py
-            # doesn't receive it, just keep in mind.
-
-            # Moves to the tag calibration state once the robot has reached the home position
-            self.state = State.CALIBRATE
+            if self.kick_future:
+                # Moves to the waiting state once the robot has reached the home position
+                self.ocr_pub.publish(True)
+                self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:
 
             # TODO: we will need to add this client that calls the calibrate action
-            self.calibrate_client()
+            self.calibrate_service_client(Empty)
             # This should send the camera calibration service as well
             # TODO: Ananya can put this to have that service call how she prefers
 
-            # moves to setup state where we draw the dashes and stuff once the calibration is complete
-            self.state = State.SETUP
+            # Moves to waiting state and listens for a return value to switch to letter
+            self.state = State.WAITING
 
-        elif self.state == State.SETUP:
+        elif self.state == State.APPROACHING:
 
-            # TODO: Ishani add the client/action for the robot to draw the noose and the dashes
-            self.setup_client()
+            # TODO: call the board service and switch to writing when where_to_write returns
+            self.movepose_service_client.call()
 
             # Moves to the waiting state once we are setup, and waits for something to happen from hangman.py
             self.state = State.WAITING
@@ -232,14 +263,19 @@ class Brain(Node):
 
                 # publish the message, draw.py is a subscriber
                 self.cartesian_mp_pub.publish(cartesian_msg)
+                ###########################
 
-            # TODO: Will need to add the call to start the OCR before we go to the waiting state
-            self.state = State.WAITING
+            if self.last_message.positions:
+                # moves to the approaching state if there are still things to be written
+                tile_origin = BoardTiles()
+                self.state = State.APPROACHING
+            else:
+                self.state = State.WAITING
 
         elif self.state == State.WAITING:
             # waiting state for writing actions
             pass
 
-        elif self.state == State.READING:
-            # waiting state for the OCR to run that will get switched to LETTER by hangman callback
+        elif self.state == State.WRITING:
+            # waiting state for the Franka to complete the cartesian trajectory before it moves back to letter
             pass
