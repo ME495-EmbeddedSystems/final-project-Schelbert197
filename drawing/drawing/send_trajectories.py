@@ -8,6 +8,7 @@ from std_msgs.msg import Header
 from std_msgs.msg import String, Float32
 
 from joint_interfaces.msg import JointTrajectories
+from brain_interfaces.msg import EEForce
 
 from enum import Enum, auto
 
@@ -32,25 +33,28 @@ class Executor(Node):
         self.sub = self.create_subscription(
             JointTrajectories, '/joint_trajectories', self.joint_trajectories_callback, 10)
         self.force_sub = self.create_subscription(
-            Float32, '/ee_force', self.force_callback, 10)
+            EEForce, '/ee_force', self.force_callback, 10)
         self.joint_trajectories = []
         self.ee_force = 0
-        self.ee_force_threshold = 19  # N
+        self.ee_force_threshold = 3  # N
         self.state = None
         self.clear = False
 
-    def force_callback(self, msg):
+        self.i = 0
 
-        self.ee_force = msg.data
+    def force_callback(self, msg):
+        self.ee_force = msg.ee_force
+        self.use_force_control = msg.use_force_control
 
     def joint_trajectories_callback(self, msg):
         self.get_logger().info("message received!")
+        self.i = 0
 
         self.joint_trajectories += msg.joint_trajectories
         # self.get_logger().info(
         #     f"joint_trajectories: {self.joint_trajectories}")
         self.clear = msg.clear
-        
+
         self.get_logger().info(f"msg.state: {msg.state}")
 
         if msg.state == "publish":
@@ -62,7 +66,8 @@ class Executor(Node):
 
         # if force is above threshold, stop executing.
         if self.ee_force > self.ee_force_threshold:
-            self.get_logger().info(f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
+            self.get_logger().info(
+                f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
             self.joint_trajectories.clear()
             self.clear = False
 

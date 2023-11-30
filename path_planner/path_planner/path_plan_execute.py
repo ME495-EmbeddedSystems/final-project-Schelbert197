@@ -280,6 +280,17 @@ class Path_Plan_Execute():
         self.goal_joint_state = result.solution.joint_state
 
     async def plan_cartesian_path(self, queue):
+        orientation_constraint = OrientationConstraint()
+        orientation_constraint.header = Header(
+            stamp=self.node.get_clock().now().to_msg())
+        orientation_constraint.orientation = Quaternion(
+            x=1.0, y=0.0, z=0.0, w=0.0)
+        orientation_constraint.link_name = 'panda_hand_tcp'
+        orientation_constraint.absolute_x_axis_tolerance = 0.1
+        orientation_constraint.absolute_y_axis_tolerance = 0.1
+        orientation_constraint.absolute_z_axis_tolerance = 0.1
+        orientation_constraint.weight = 1.0
+
         self.cartesian_path_request = GetCartesianPath.Request()
 
         self.cartesian_path_request.header = Header(
@@ -307,6 +318,7 @@ class Path_Plan_Execute():
         self.cartesian_path_request.avoid_collisions = True
         self.cartesian_path_request.max_velocity_scaling_factor = 0.1
         self.cartesian_path_request.max_acceleration_scaling_factor = 0.1
+        self.cartesian_path_request.path_constraints.orientation_constraint = []
         # self.node.get_logger().info(f"request: {self.cartesian_path_request}")
 
         cartesian_trajectory_result = await self.cartesian_path_client.call_async(self.cartesian_path_request)

@@ -21,6 +21,11 @@ from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
 from brain_interfaces.srv import MovePose, MoveJointState, Cartesian
+from brain_interfaces.msg import EEForce
+
+import numpy as np
+import transforms3d as tf
+np.set_printoptions(suppress=True)
 
 
 class State(Enum):
@@ -139,7 +144,7 @@ class Drawing(Node):
         # this publisher is used to send the current force at the end-effector
         # to the node we created to execute trajectories.
         self.force_pub = self.create_publisher(
-            Float32, '/ee_force', 10)
+            EEForce, '/ee_force', 10)
 
         self.font_size = 0.1
 
@@ -152,10 +157,21 @@ class Drawing(Node):
         self.L1 = 0.1070  # length of panda_link7
         self.L2 = 0.1130  # distancefrom panda_joint7 to gripper tips
 
+        self.gripper_mass = 1.795750991  # kg
+        self.g = 9.81  # m/s**2
+
+        # position of the center of mass of the end-effector
+        # in the panda_hand frame
+        self.pc = np.array([-0.01, 0, 0.03])
+        # position of the tip of the end-effector in the panda_hand frame
+        self.pe = np.array([0, 0, 0.1034])
+        self.p6f = np.array([0.088, -0.1070, 0])
+
         self.force_offset = 0.0  # N
         self.force_threshold = 3.0  # N
         self.calibration_counter = 0.0  # N
         self.ee_force = 0.0  # N
+        self.use_force_control = False
 
         self.current_pos = Point(x=0.0, y=0.0, z=0.0)
         self.letter_start_pos = Point(x=0.0, y=0.0, z=0.0)
@@ -166,6 +182,75 @@ class Drawing(Node):
         )
 
         self.prev_state = State.STOP
+
+    def array_to_transform_matrix(self, translation, quaternion):
+        # Normalize the quaternion
+        quaternion /= np.linalg.norm(quaternion)
+        quaternion = [quaternion[3], quaternion[0],
+                      quaternion[1], quaternion[2]]
+
+        # Create rotation matrix from quaternion
+        rotation_matrix = tf.quaternions.quat2mat(quaternion)
+
+        # Create the transformation matrix
+        transform_matrix = np.eye(4)
+        transform_matrix[:3, :3] = rotation_matrix
+        transform_matrix[:3, 3] = translation
+
+        return transform_matrix, rotation_matrix
+
+    def calc_joint_torque_offset(self):
+
+        pw6, quaternion_w6 = self.get_transform(
+            'panda_link0', 'panda_link6')
+
+        Tw6, Rw6 = self.array_to_transform_matrix(pw6, quaternion_w6)
+
+        p6f, quaternion_6f = self.get_transform('panda_link6', 'panda_hand')
+
+        # self.get_logger().info(f"p6f: {p6f}")
+        # self.get_logger().info(f"quaternioon_6f: {quaternion_6f}")
+
+        T6f, R6f = self.array_to_transform_matrix(p6f, quaternion_6f)
+
+        # self.get_logger().info(f"T6f: {T6f}")
+
+        Fw = np.array([0, 0, -self.gripper_mass * self.g])
+        F6 = np.linalg.inv(Rw6) @ Fw
+        M6 = F6 * (p6f + R6f @ self.pc)
+        # M6 = np.array([F6[0] * p6f[2]])
+
+        # self.get_logger().info(f"R6f @ self.pc: {R6f @ self.pc}")
+        # self.get_logger().info(f"p6f: {p6f + R6f @ self.pc}")
+        # self.get_logger().info(f"Rw6: {np.linalg.inv(Rw6)}")
+        # self.get_logger().info(f"Fw: {Fw}")
+        # self.get_logger().info(f"Rw6 @ Fw: {np.linalg.inv(Rw6) @ Fw}")
+        # self.get_logger().info(f"F6: {F6}")
+        # self.get_logger().info(f"M6: {M6}")
+
+        joint_torque_offset = M6[1]
+
+        return joint_torque_offset
+
+    def calc_ee_force(self, effort_joint6):
+
+        pe6, quaternion_e6 = self.get_transform(
+            'panda_hand_tcp', 'panda_link6')
+
+        Te6, Re6 = self.array_to_transform_matrix(pe6, quaternion_e6)
+
+        p6e, quaternion_6e = self.get_transform(
+            'panda_link6', 'panda_hand_tcp')
+
+        T6e, R6e = self.array_to_transform_matrix(p6e, quaternion_6e)
+
+        M6 = np.array([0, effort_joint6, 0])
+        F6 = np.divide(M6, p6e,
+                       out=np.zeros_like(p6e), where=p6e != 0)
+
+        Fe = Re6 @ F6
+
+        return Fe
 
     def execute_trajectory_status_callback(self, msg):
 
@@ -186,6 +271,7 @@ class Drawing(Node):
 
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
+        self.use_force_control = False
 
         return response
 
@@ -212,6 +298,7 @@ class Drawing(Node):
 
         self.cartesian_mp_queue += request.poses
         self.state = State.PLAN_CARTESIAN_MOVE
+        self.use_force_control = True
 
         return response
 
@@ -219,12 +306,11 @@ class Drawing(Node):
         '''
         Queue a JointState to be planned for.
 
-        When the jointstate_mp service receives a service call,
-        this function will set the goal_joint_state to the joint_state
-        from the service call directly, instead of using a Pose() message
-        with the compute_ik service like the moveit motion planner.
-        Once this JointState is planned for, it will be immediately
-        executed.
+        When the jointstate_mp service is called, we set the goal_joint_state 
+        to the joint_state from the service call directly, instead of
+        using a Pose() message with the compute_ik service like the moveit 
+        motion planner. Once this JointState is planned for, it will be 
+        immediately executed.
 
         Args:
         ----
@@ -283,8 +369,8 @@ class Drawing(Node):
             )
             transl = trans.transform.translation
             rot = trans.transform.rotation
-            brick_to_platform = [transl.x, transl.y, transl.z]
-            rotation = [rot.x, rot.y, rot.z, rot.w]
+            brick_to_platform = np.array([transl.x, transl.y, transl.z])
+            rotation = np.array([rot.x, rot.y, rot.z, rot.w])
 
             # print(brick_to_platform[2])
             return brick_to_platform, rotation
@@ -338,7 +424,8 @@ class Drawing(Node):
                 self.calibration_counter += 1
 
             self.force_offset = self.force_offset/calibration_cycles
-            self.get_logger().info(f"force offset complete: {self.force_offset}")
+            self.get_logger().info(
+                f"force offset complete: {self.force_offset}")
             self.state = State.WAITING
 
         elif self.state == State.PLAN_MOVEGROUP:
@@ -403,13 +490,16 @@ class Drawing(Node):
             # the moveit motion planner has completed planning. This will only
             # happen if the state prior was State.PLAN_MOVEGROUP.
 
-            if not self.use_fake_hardware:
+            joint_torque_offset = self.calc_joint_torque_offset()
 
-                if self.path_planner.current_joint_state.effort:
-                    self.ee_force = self.path_planner.current_joint_state.effort[5] / (
-                        self.L1 + self.L2)
+            self.ee_force = self.calc_ee_force(
+                self.path_planner.current_joint_state.effort[5] - joint_torque_offset)
 
-            self.force_pub.publish(Float32(data=self.ee_force))
+            ee_force_msg = EEForce()
+            ee_force_msg.ee_force = self.ee_force[2]
+            ee_force_msg.use_force_control = self.use_force_control
+
+            self.force_pub.publish(ee_force_msg)
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 

@@ -6,29 +6,19 @@ from std_srvs.srv import Empty
 from geometry_msgs.msg import Point, Quaternion, Pose
 from sensor_msgs.msg import JointState
 
-from path_planner.path_plan_execute import Path_Plan_Execute
-from character_interfaces.alphabet import alphabet
-from joint_interfaces.msg import JointTrajectories
-from brain_interfaces.srv import BoardTiles, MovePose
+from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
 
-from action_msgs.msg import GoalStatus
-
-from brain_interfaces.srv import Cartesian
-from std_msgs.msg import String, Float32
-
-from tf2_ros.buffer import Buffer
-from tf2_ros.transform_listener import TransformListener
-
-import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState
+from std_msgs.msg import String
 
 
 class State(Enum):
     # will change states when drawing different components
-    DASHES = auto()
+    CALIBRATED = auto()
+    WORD = auto()
+    WRONG_GUESS = auto()
     STAND = auto()
 
 
@@ -39,6 +29,11 @@ class Kickstart(Node):
         # create kickstart service
         self.kickstart_service = self.create_service(
             Empty, 'kickstart_service', self.kickstart_callback)
+        
+        # timer variables
+        # self.frequency = 100.0
+        # self.timer_period = 1 / self.frequency
+        # self.timer = self.create_timer(self.timer_period, self.timer_callback)
 
         # create mutually exclusive callback groups
         self.cal_callback_group = MutuallyExclusiveCallbackGroup()
@@ -71,34 +66,69 @@ class Kickstart(Node):
         self.cal_state = msg
 
     async def kickstart_callback(self, request, response):
-        
-        return response
-
-    async def timer(self):
-        # calibrate once -- call Ananya's stuff
+        # CALIBRATE ONCE
         await self.cal_client.call_async(request=Empty.Request())
 
-        # QUEUE EACH SECTION OF GAME SETUP - INCORRECT LETTERS, CORRECT LETTERS, HANGMAN STAND
+        # DASHES
+        dash_x = [0.01, 0.05, 0.09, 0.09]
+        dash_y = [0.0, 0.0, 0.0, 0.0]
+        dash_on = [True, True, True, False]
 
-        # set up position for each component (list of Mode and positions)
-        ############# list for BoardTiles of incorrect letter dashes ##############
-        # DASH 1:
-        # if self.cal_state == "CALIBRATED":
+        # WRONG DASHES
+        # 1st wrong dash info
         request = BoardTiles.Request()
         request.mode = 0
         request.position = 0
-        request.x = [0.01, 0.05, 0.09, 0.09]
-        request.y = [0.0, 0.0, 0.0, 0.0]
-        request.onboard = [True, True, True, False]
+        request.x = dash_x
+        request.y = dash_y
+        request.onboard = dash_on
 
-        pose_list = await self.tile_client.call_async(request)
-        self.get_logger().info("where_to_write done")
-        request = Cartesian.Request()
-        request.poses = pose_list.origin_pose
+        # denote pose_list and initial_pose from BoardTiles response
+        resp = await self.tile_client.call_async(request)
+        pose1 = resp.initial_pose
+        pose_list = resp.pose_list
 
-        self.get_logger().info(f"pose+list: {pose_list}")
+        self.get_logger().info(f"Pose List for Dash: {pose_list}")
+    
+        # FIRST TIME MOVING TO BOARD - MOVEIT_MP
+        # move robot to first pose in front of dash origin - moveit_mp
+        await self.movemp_client.call_async(pose1)
+        # draw remaining pose dashes with Cartesian mp
+        for pose in pose_list:
+            self.get_logger().info(f'{pose}')
+            request2 = Cartesian.Request()
+            request2.target_pose = pose
+            await self.cartesian_client.call_async(request2)
 
-        await self.cartesian_client.call_async(request)
+        return response
+
+    # async def timer_callback(self):
+    #     # calibrate once -- call Ananya's stuff
+    #     await self.cal_client.call_async(request=Empty.Request())
+
+    #     # QUEUE EACH SECTION OF GAME SETUP - INCORRECT LETTERS, CORRECT LETTERS, HANGMAN STAND
+
+    #     # set up position for each component (list of Mode and positions)
+    #     ############# list for BoardTiles of incorrect letter dashes ##############
+    #     # DASH 1:
+    #     if self.cal_state == "CALIBRATED":
+    #         request = BoardTiles.Request()
+    #         request.mode = 0
+    #         request.position = 0
+    #         request.x = [0.01, 0.05, 0.09, 0.09]
+    #         request.y = [0.0, 0.0, 0.0, 0.0]
+    #         request.onboard = [True, True, True, False]
+
+    #         pose_list = await self.tile_client.call_async(request)
+
+    
+
+    #         request = Cartesian.Request()
+    #         request.poses = pose_list.origin_pose
+
+    #         self.get_logger().info(f"pose+list: {pose_list}")
+
+    #         await self.cartesian_client.call_async(request)
 
         # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
         # for pose in pose_list.origin_pose:
