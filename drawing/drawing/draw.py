@@ -275,16 +275,20 @@ class Drawing(Node):
 
         self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
 
+        self.plan_future = Future()
+
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
         self.use_force_control = False
+
         self.get_logger().info('before future')
         await self.plan_future
-        self.get_logger().info('after future ####################################################################')
+        self.get_logger().info(
+            'after future ####################################################################')
 
         return response
 
-    def cartesian_mp_callback(self, request, response):
+    async def cartesian_mp_callback(self, request, response):
         '''
         Queue a letter to be drawn.
 
@@ -304,10 +308,13 @@ class Drawing(Node):
 
         # self.letter_start_point.y = request.start_point.y
         # self.letter_start_point.z = request.start_point.z
+        self.plan_future = Future()
 
         self.cartesian_mp_queue += request.poses
         self.state = State.PLAN_CARTESIAN_MOVE
         self.use_force_control = True
+
+        await self.plan_future
 
         return response
 
@@ -488,7 +495,7 @@ class Drawing(Node):
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 joint_trajectories)
-            
+            self.execute_future = Future()
             await self.execute_future
             # self.joint_traj_pub.publish(joint_trajectories)
 
@@ -511,7 +518,7 @@ class Drawing(Node):
             ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
-            
+
             if self.execute_future.done():
                 self.plan_future.set_result("done")
 
