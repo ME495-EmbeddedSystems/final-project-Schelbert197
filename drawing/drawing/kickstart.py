@@ -25,27 +25,36 @@ from tf2_ros.transform_listener import TransformListener
 import tf2_ros
 from brain_interfaces.srv import MovePose, MoveJointState
 
+
 class State(Enum):
     # will change states when drawing different components
     DASHES = auto()
     STAND = auto()
 
+
 class Kickstart(Node):
     def __init__(self):
         super().__init__("kickstart")
-        
+
         # create kickstart service
-        self.kickstart_service = self.create_service(Empty, 'kickstart_service',self.kickstart_callback)
-        
+        self.kickstart_service = self.create_service(
+            Empty, 'kickstart_service', self.kickstart_callback)
+
         # create mutually exclusive callback groups
         self.cal_callback_group = MutuallyExclusiveCallbackGroup()
         self.tile_callback_group = MutuallyExclusiveCallbackGroup()
         self.mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
 
         # create service clients
-        self.cal_client = self.create_client(Empty,'calibrate',callback_group=self.cal_callback_group)
-        self.tile_client = self.create_client(BoardTiles,'where_to_write',callback_group=self.tile_callback_group)
-        self.movemp_client = self.create_client(MovePose,'/moveit_mp',callback_group=self.mp_callback_group)
+        self.cal_client = self.create_client(
+            Empty, 'calibrate', callback_group=self.cal_callback_group)
+        self.tile_client = self.create_client(
+            BoardTiles, 'where_to_write', callback_group=self.tile_callback_group)
+        self.movemp_client = self.create_client(
+            MovePose, '/moveit_mp', callback_group=self.mp_callback_group)
+        self.cartesian_client = self.create_client(
+            Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)
 
         # wait for clients' services to be available
         while not self.cal_client.wait_for_service(timeout_sec=1.0):
@@ -67,17 +76,25 @@ class Kickstart(Node):
         request = BoardTiles.Request()
         request.mode = 0
         request.position = 0
-        request.x = [0.01,0.05,0.09,0.09]
-        request.y = [0.0,0.0,0.0,0.0]
-        request.onboard = [True,True,True,False]
+        request.x = [0.01, 0.05, 0.09, 0.09]
+        request.y = [0.0, 0.0, 0.0, 0.0]
+        request.onboard = [True, True, True, False]
 
         pose_list = await self.tile_client.call_async(request)
+
+        request = Cartesian.Request()
+        request.poses = pose_list.origin_pose
+
+        self.get_logger().info(f"pose+list: {pose_list}")
+
+        await self.cartesian_client.call_async(request)
+
         # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
-        for pose in pose_list.origin_pose:
-            self.get_logger().info(f'{pose}')
-            request2 = MovePose.Request()
-            request2.target_pose = pose
-            await self.movemp_client.call_async(request2)
+        # for pose in pose_list.origin_pose:
+        #     self.get_logger().info(f'{pose}')
+        #     request2 = MovePose.Request()
+        #     request2.target_pose = pose
+        #     await self.movemp_client.call_async(request2)
 
         # DASH 2:
         # request = BoardTiles()
@@ -104,12 +121,13 @@ class Kickstart(Node):
         # # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
         # for pose in pose_list:
         #     await self.movemp_client.call_async(pose)
-        
+
         # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
 
-        # use graham's code to queue each section of components 
-        
+        # use graham's code to queue each section of components
+
         return response
+
 
 def main(args=None):
     rclpy.init(args=args)

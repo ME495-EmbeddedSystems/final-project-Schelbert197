@@ -180,9 +180,11 @@ class Drawing(Node):
             self.letter_start_pos = Point(x=trans[0], y=trans[1], z=trans[2])
             self.state = State.PLAN_MOVEGROUP
 
-    def moveit_mp_callback(self, request, response):
+    async def moveit_mp_callback(self, request, response):
 
-        self.moveit_mp_queue.append(request)
+        self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
+
+        self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
 
         return response
@@ -203,10 +205,12 @@ class Drawing(Node):
         msg: the custom message (brain_interfaces/Cartesian.msg)
         '''
 
-        self.letter_start_point.y = request.start_point.y
-        self.letter_start_point.z = request.start_point.z
+        self.get_logger().info(f"CARTESIAN MOTION PLAN REQUEST RECEIVED")
 
-        self.cartesian_mp_queue.append(request.poses)
+        # self.letter_start_point.y = request.start_point.y
+        # self.letter_start_point.z = request.start_point.z
+
+        self.cartesian_mp_queue += request.poses
         self.state = State.PLAN_CARTESIAN_MOVE
 
         return response
@@ -227,18 +231,31 @@ class Drawing(Node):
         request: A JointState() message we want to plan a path to.
         response: An empty message.
         '''
-        joints_to_move = list(zip(request.joint_names, request.joint_positions))
+
+        self.get_logger().info(f"JOINTSTATE MOTION PLAN REQUEST RECEIVED")
+
+        joints_to_move = list(
+            zip(request.joint_names, request.joint_positions))
         # N = len(joints_to_move)
         self.path_planner.goal_joint_state = self.path_planner.current_joint_state
+        self.path_planner.goal_joint_state.effort = []  # haha!!
+        self.path_planner.goal_joint_state.header.stamp.nanosec = 0
+        self.path_planner.goal_joint_state.header.stamp.sec = 0
+        self.path_planner.goal_joint_state.header.frame_id = 'panda_link0'
 
         # while joints_to_move:
-        for i in range(len(self.path_planner.goal_joint_state.name)):
+        self.get_logger().info(
+            f"goal_joint_tstae_names: {self.path_planner.goal_joint_state.name}")
+        for i in range(len(self.path_planner.goal_joint_state.name)-2):
             # self.get_logger().info(f'{ self.path_planner.goal_joint_state.name[i]} 1')ointTrajectory(head
             # self.get_logger().info(f'{joints_to_move[0]} 2')
-            if len(joints_to_move)>0:
+            if len(joints_to_move) > 0:
                 if joints_to_move[0][0] == self.path_planner.goal_joint_state.name[i]:
                     self.path_planner.goal_joint_state.position[i] = joints_to_move[0][1]
                     joints_to_move.pop(0)
+
+        self.get_logger().info(
+            f"goal_jiont_staet: {self.path_planner.goal_joint_state}")
 
         self.path_planner.plan_path()
 
@@ -337,6 +354,7 @@ class Drawing(Node):
             self.get_logger().info(
                 f"self.moveit_mp_queue[0]: {self.moveit_mp_queue[0]}")
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
+            self.get_logger().info("here")
             self.path_planner.plan_path()
 
             self.state = State.WAITING
@@ -352,6 +370,8 @@ class Drawing(Node):
 
             if not self.cartesian_mp_queue:
                 self.state == State.WAITING
+
+            self.get_logger().info(f"queue: {self.cartesian_mp_queue}")
 
             await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue)
 
@@ -369,6 +389,8 @@ class Drawing(Node):
 
             joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
+            self.get_logger().info(
+                f"current joint states: {self.path_planner.current_joint_state.position}")
             self.joint_traj_pub.publish(joint_trajectories)
 
             self.state = State.WAITING
@@ -381,8 +403,10 @@ class Drawing(Node):
             # happen if the state prior was State.PLAN_MOVEGROUP.
 
             if not self.use_fake_hardware:
-                self.ee_force = self.path_planner.current_joint_state.effort[5] / (
-                    self.L1 + self.L2) - self.force_offset
+
+                if self.path_planner.current_joint_state.effort:
+                    self.ee_force = self.path_planner.current_joint_state.effort[5] / (
+                        self.L1 + self.L2) - self.force_offset
 
             self.force_pub.publish(Float32(data=self.ee_force))
 

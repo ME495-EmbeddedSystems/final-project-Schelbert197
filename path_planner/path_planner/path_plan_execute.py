@@ -143,7 +143,7 @@ class Path_Plan_Execute():
             group_name='panda_manipulator',
             num_planning_attempts=10,
             allowed_planning_time=5.0,
-            max_velocity_scaling_factor=0.3,
+            max_velocity_scaling_factor=0.1,
             max_acceleration_scaling_factor=0.1,
             max_cartesian_speed=0.0
         )
@@ -275,6 +275,8 @@ class Path_Plan_Execute():
 
         """
         result = await self.ik_callback(pose, self.current_joint_state)
+        self.node.get_logger().info(
+            f"solution.jiont_state: {result.solution.joint_state}")
         self.goal_joint_state = result.solution.joint_state
 
     async def plan_cartesian_path(self, queue):
@@ -294,7 +296,7 @@ class Path_Plan_Execute():
 
         # leave the commented out lines below here for now
         # they may come in handy later as we continue to debug
-        self.cartesian_path_request.plgroup_name = self.node.group_name
+        self.cartesian_path_request.group_name = self.node.group_name
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
         # setting this to 0.1 for now, could cause problems later
@@ -341,11 +343,13 @@ class Path_Plan_Execute():
         """
         self.movegroup_status = GoalStatus.STATUS_UNKNOWN
         self.movegroup_result = None
-        # await get_goal_joint_states()
+        # await self.get_goal_joint_states()
         if len(self.goal_joint_state.position) > 0:
             movegroup_goal_msg = MoveGroup.Goal()
 
             movegroup_goal_msg = self.create_movegroup_msg(movegroup_goal_msg)
+
+            self.node.get_logger().info("here2")
 
             self.send_goal_future = self.movegroup_client.send_goal_async(
                 movegroup_goal_msg,
@@ -399,14 +403,19 @@ class Path_Plan_Execute():
             f"movegroup_result: {self.movegroup_status}")
 
         self.planned_trajectory = self.movegroup_result.planned_trajectory
+        self.node.get_logger().info(
+            f"currentjointstate: {self.current_joint_state}")
+        self.node.get_logger().info(
+            f"plannedtrajectory: {self.planned_trajectory}")
 
         self.node.get_logger().info("Trajectory Planned!")
 
     def execute_individual_trajectories(self):
 
         joint_trajectories = []
-        
-        self.node.get_logger().info(f"planned trajectory: {self.planned_trajectory}")
+
+        # self.node.get_logger().info(
+        #     f"planned trajectory: {self.planned_trajectory}")
 
         for point in self.planned_trajectory.joint_trajectory.points:
             temp = JointTrajectoryPoint()
@@ -438,7 +447,7 @@ class Path_Plan_Execute():
         """
         feedback = feedback_msg.feedback
         self.node.get_logger().info(f"Received Feedback: {feedback}")
-        
+
     def set_goal_pose(self, point):
         """
         Set desired goal position.

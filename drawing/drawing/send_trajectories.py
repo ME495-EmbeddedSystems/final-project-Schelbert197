@@ -47,8 +47,8 @@ class Executor(Node):
         self.get_logger().info("message received!")
 
         self.joint_trajectories += msg.joint_trajectories
-        self.get_logger().info(
-            f"joint_trajectories: {self.joint_trajectories}")
+        # self.get_logger().info(
+        #     f"joint_trajectories: {self.joint_trajectories}")
         self.clear = msg.clear
 
         if msg.state == "publish":
@@ -70,6 +70,10 @@ class Executor(Node):
         # if list of waypoints is not empty, publish to the topic that executes
         # trajectories oof the panda
         elif len(self.joint_trajectories) != 0 and self.state == State.PUBLISH:
+            self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
+
+            self.get_logger().info(
+                f"joint_Trajectory[0]: {self.joint_trajectories[0]}")
 
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
