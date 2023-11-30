@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.task import Future
 
 from std_srvs.srv import Empty
 from geometry_msgs.msg import Point, Quaternion, Pose
@@ -20,7 +21,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState, Cartesian
+from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories
 from brain_interfaces.msg import EEForce
 
 import numpy as np
@@ -98,6 +99,7 @@ class Drawing(Node):
         self.cartesian_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
+        self.execute_joint_trajectories_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
             0.01, self.timer_callback, callback_group=self.timer_callback_group)
 
@@ -138,8 +140,9 @@ class Drawing(Node):
 
         # this publisher is used to send the joint trajectories we plan to our
         # node that we created to execute them.
-        self.joint_traj_pub = self.create_publisher(
-            JointTrajectories, '/joint_trajectories', 10)
+
+        self.joint_trajectories_client = self.create_client(
+            ExecuteJointTrajectories, '/joint_trajectories', callback_group=self.execute_joint_trajectories_callback_group)
 
         # this publisher is used to send the current force at the end-effector
         # to the node we created to execute trajectories.
@@ -147,6 +150,9 @@ class Drawing(Node):
             EEForce, '/ee_force', 10)
 
         self.font_size = 0.1
+
+        self.plan_future = Future()
+        self.execute_future = Future()
 
         self.moveit_mp_queue = []  # moveit motion planner queue
         self.cartesian_mp_queue = []  # cartesian motion planner queue
@@ -269,13 +275,21 @@ class Drawing(Node):
 
         self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
 
+        self.plan_future = Future()
+        self.execute_future = Future()
+
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
         self.use_force_control = False
 
+        self.get_logger().info('before future')
+        await self.plan_future
+        self.get_logger().info(
+            'after future ####################################################################')
+
         return response
 
-    def cartesian_mp_callback(self, request, response):
+    async def cartesian_mp_callback(self, request, response):
         '''
         Queue a letter to be drawn.
 
@@ -295,10 +309,14 @@ class Drawing(Node):
 
         # self.letter_start_point.y = request.start_point.y
         # self.letter_start_point.z = request.start_point.z
+        self.plan_future = Future()
+        self.execute_future = Future()
 
         self.cartesian_mp_queue += request.poses
         self.state = State.PLAN_CARTESIAN_MOVE
         self.use_force_control = True
+
+        await self.plan_future
 
         return response
 
@@ -471,15 +489,17 @@ class Drawing(Node):
             # send the trajectory previously planned, either by the moveit motion
             # planner or the cartesian path planner, to our node for executing trajectories.
 
-            joint_trajectories = JointTrajectories()
+            joint_trajectories = ExecuteJointTrajectories.Request()
             joint_trajectories.clear = False
             joint_trajectories.state = "publish"
 
             joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
-            self.get_logger().info(
-                f"current joint states: {self.path_planner.current_joint_state.position}")
-            self.joint_traj_pub.publish(joint_trajectories)
+            self.execute_future = self.joint_trajectories_client.call_async(
+                joint_trajectories)
+            # self.execute_future = Future()
+            await self.execute_future
+            # self.joint_traj_pub.publish(joint_trajectories)
 
             self.state = State.WAITING
 
@@ -500,6 +520,13 @@ class Drawing(Node):
             ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
+            
+            self.get_logger().info(f"future result: {self.execute_future.result()}")
+
+            if self.execute_future.result() is not None:
+                if self.execute_future.result().result == "done":
+                    self.plan_future.set_result("done")
+                    self.get_logger().info("done does not work")
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 

@@ -18,13 +18,13 @@ from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles, MoveJointState
+from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
 import modern_robotics as mr
-
+import asyncio
 
 class State(Enum):
     CALIBRATE = auto()
@@ -67,10 +67,10 @@ class Tags(Node):
 
     def __init__(self):
         super().__init__("tags")
-        self.freq = 200.0
+        self.freq = 100.0
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
-        self.timer = self.create_timer(1 / self.freq, self.timer_callback)
+        
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
         self.grid = Grid((0, .80), (0, .60), .10)
@@ -78,12 +78,15 @@ class Tags(Node):
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.move_js_callback_group = MutuallyExclusiveCallbackGroup()
+        self.timer_callback_grp = MutuallyExclusiveCallbackGroup()
+        self.calibrate_callback_grp = MutuallyExclusiveCallbackGroup()
 
+        self.timer = self.create_timer(1 / self.freq, self.timer_callback, callback_group=self.timer_callback_grp)
         # creating services
         self.record_service = self.create_service(
             Empty, 'record_transform', self.record_callback)
         self.calibrate_service = self.create_service(
-            Empty, 'calibrate', self.calibrate_callback)
+            Empty, 'calibrate', self.calibrate_callback, callback_group=self.calibrate_callback_grp)
         self.where_to_write = self.create_service(
             BoardTiles, 'where_to_write', self.where_to_write_callback)
 
@@ -91,13 +94,13 @@ class Tags(Node):
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
 
         # create subscribers
-        self.goal_reach_sub = self.create_subscription(
-            String, 'execute_trajectory_status', self.goal_reach_sub_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
+        # self.goal_reach_sub = self.create_subscription(
+        #     String, 'execute_trajectory_status', self.goal_reach_sub_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
         self.goal_state = "not"
 
         # create client
         self.move_js_client = self.create_client(
-            MoveJointState, 'jointstate_mp', callback_group=self.move_js_callback_group)
+            MovePose, 'moveit_mp', callback_group=self.move_js_callback_group)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -118,14 +121,22 @@ class Tags(Node):
         self.robot_board_write.header.stamp = self.get_clock().now().to_msg()
         
         
+        #Transform to save the robot to board transform
+        self.boardT = np.eye(4)
+
+
+    # Create a new Future object.
+        self.future = rclpy.task.Future()
+        self.future_satate = rclpy.task.Future()
         # wait for services
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
                 'Move Joint State service not available, waiting again...')
 
-    def goal_reach_sub_callback(self, msg):
-        if msg == "done":
-            self.goal_state = "done"
+    # def goal_reach_sub_callback(self, msg):
+    #     if msg == "done":
+    #         self.future_satate.set_result("done")
+    #     self.get_logger().info("subs")
 
     def make_transform(self):
 
@@ -182,8 +193,12 @@ class Tags(Node):
         response_a = []
         pos = Pose()
         self.get_logger().info("where_to_write2")
-        ansT, ansR = self.get_transform('panda_link0', 'board')
-        Trb = self.array_to_transform_matrix(ansT, ansR)
+        # ansT, ansR = self.get_transform('panda_link0', 'board')
+        # ansT = self.robot_board.transform.translation
+        # ansR = self.robot_board.transform.rotation
+        # self.get_logger().info(f'board : {ansT, ansR}')
+        # Trb = self.array_to_transform_matrix(ansT, ansR)
+        Trb = self.boardT 
         lx, ly = self.grid.grid_to_world(request.mode, request.position)
         Tbl = np.array([[1, 0, 0, lx],
                         [0, 1, 0, ly],
@@ -203,12 +218,12 @@ class Tags(Node):
         position, rotation = self.matrix_to_position_quaternion(Tra, 1)
         pos.position = position
         pos.orientation = rotation
-
+        self.robot_board_write.transform.translation , self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(Tra)
         response.inital_pose = pos
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
-            z = 0.2 if request.onboard[i] else 0.15
+            z = 0.01 if request.onboard[i] else 0.2
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
@@ -226,17 +241,59 @@ class Tags(Node):
             pos.orientation = rotation
 
             response_a.append(pos)
-        self.robot_board_write.transform.translation , self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(Tra)
+        
         self.get_logger().info("where_to_write3")
         response.pose_list = response_a
         return response
 
     async def calibrate_callback(self, request, response):
         self.state = State.CALIBRATE
-        goal_js = MoveJointState.Request()
-        goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
-        goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
-        # ans = await self.move_js_client.call_async(goal_js)
+        # ([], [])
+
+        
+        goal_js = MovePose.Request()
+        # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
+        # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
+        goal_js.target_pose.position = Point(x=0.30744234834406486, y=-0.17674628233240325,z= 0.5725350884705022)
+        goal_js.target_pose.orientation = Quaternion(x= 0.7117299678289105, y= -0.5285053338340909, z= 0.268057323473255, w= 0.37718408812611504)
+        ##################### moving to the position#################### 
+        self.get_logger().info('before moved')
+        ans = await self.move_js_client.call_async(goal_js)
+        self.goal_state = "done"
+        self.get_logger().info('moved')
+        # self.goal_state = await self.future_satate
+        
+        ################3when its done start doing calibrate sequence
+       
+        
+        ansT, ansR = await self.future
+        while ansT[0] == 0.0:
+            ansT, ansR = await self.future
+            # self.get_logger().info(f"{ansT, ansR}")
+            # self.get_logger().info('value set in service')
+        # if ansT[0] != 0.0:
+        Ttb = np.array([[1, 0, 0, 0.05],
+                        [0, 1, 0, 0.05],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+        # Ttb = np.array([0.063,0.063,0,1])
+        Trt = self.array_to_transform_matrix(ansT, ansR)
+
+        Trb = Trt @ Ttb
+        self.boardT = Trt
+        self.get_logger().info(f'Trb: \n{Trb}')
+        pos, rotation = self.matrix_to_position_quaternion(Trb)
+        self.get_logger().info(f'Trt: \n{Trt}')
+        self.get_logger().info(f'Trb: \n{Trb}')
+        self.robot_board.transform.translation = pos
+        self.robot_board.transform.rotation = rotation
+        # self.state = State.OTHER
+        self.goal_state = "not"
+        self.get_logger().info(f'Trb: {pos,rotation}')
+
+        
+        
+
         self.get_logger().info("calibrate")
         return response
 
@@ -320,43 +377,28 @@ class Tags(Node):
 
     async def timer_callback(self):
         msg = String()
+        # ans1T, ans1R = self.get_transform('panda_link6', 'panda_hand')
+        # self.get_logger().info(f'hand: {self.array_to_transform_matrix(ans1T, ans1R)}')
+        
         # self.get_logger().info("timmer function")
-        if self.state == State.CALIBRATE:
-            # TODO: goto jointstate if reached then do this stuff
-
+        if self.state == State.CALIBRATE and self.goal_state == "done":
+           
+            self.get_logger().info('function done')
             ansT, ansR = self.get_transform('panda_link0', 'tag11')
-            msg.data = "CALIBRATING"
-            # if ansT[0] != 0.0 and self.goal_state == "done":
-            if ansT[0] != 0.0:
-                Ttb = np.array([[1, 0, 0, 0.063],
-                                [0, 1, 0, 0.063],
-                                [0, 0, 1, 0],
-                                [0, 0, 0, 1]])
-                # Ttb = np.array([0.063,0.063,0,1])
-                Trt = self.array_to_transform_matrix(ansT, ansR)
-
-                Trb = Trt @ Ttb
-                self.get_logger().info(f'Trb: \n{Trb}')
-                pos, rotation = self.matrix_to_position_quaternion(Trb)
-                self.get_logger().info(f'Trt: \n{Trt}')
-                self.get_logger().info(f'Trb: \n{Trb}')
-                self.robot_board.transform.translation = pos
-                self.robot_board.transform.rotation = rotation
-                self.state = State.OTHER
-                self.goal_state = "not"
-                self.get_logger().info(f'Trb: {pos,rotation}')
+            # self.get_logger().info(f'{ansT, ansR}')
+            self.future.set_result([ansT,ansR])
+            
 
         
         # ansTi, ansRi = self.get_transform('board', 'panda_hand_tcp')
         # pls = self.array_to_transform_matrix(ansTi, ansRi)
         # self.get_logger().info(f'{pls}')
-        if self.state == State.OTHER:
-            msg.data = "CALIBRATED"
+        # if self.state == State.OTHER:
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.robot_board_write.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
         self.broadcaster.sendTransform(self.robot_board_write)
-        self.state_publisher.publish(msg)
+        
 
 
 def Tags_entry(args=None):

@@ -14,4 +14,4 @@ apriltag:                 # node name
     tag:
       ids:    [1, 2, 41,56,11,12,13,14]         # tag IDs for which to publish transform
       frames: ["tag1", "tag2","tag41","tag56","tag11","tag12","tag13","tag14"]   # frame names
-      sizes:  [0.08, 0.08,0.065,0.048,0.058,0.058,0.058,0.058]     # tag-specific edge size, overrides the default 'size'
+      sizes:  [0.08, 0.08,0.065,0.048,0.08,0.058,0.058,0.058]     # tag-specific edge size, overrides the default 'size'
