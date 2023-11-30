@@ -20,7 +20,9 @@ class ImageModification(Node):
         self.cap = self.create_subscription(Image, "camera/color/image_raw", self.image_modification, qos_profile=10)
 
         # create publisher to publish modified image
-        self.modified_image_publish = self.create_publisher(Image, "modified_image", 10)
+        self.modified_image_1_publish = self.create_publisher(Image, "modified_image_1", 10)
+        self.modified_image_2_publish = self.create_publisher(Image, "modified_image_2", 10)
+
 
     def image_modification(self, msg):
         """Convert image to opencv format"""
@@ -36,15 +38,19 @@ class ImageModification(Node):
         ret3,th3 = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
 
         # cv2.imshow("binarized", th3)
-        kernel = np.ones((17,17),np.uint8)
+        kernel = np.ones((13,13),np.uint8)
         dilation = cv2.dilate(th3,kernel,iterations = 1)
         inverted_image = cv2.bitwise_not(dilation)
         # cv2.imshow("inverted_image", inverted_image)
         resized_image = imutils.resize(inverted_image, width=500, height=500)
         cv2.imshow("resized_image", resized_image)
 
-        img_publish = self.cv_bridge.cv2_to_imgmsg(self.frame)
-        self.modified_image_publish.publish(img_publish)
+        img_publish_1 = self.cv_bridge.cv2_to_imgmsg(self.frame)
+        img_publish_2 = self.cv_bridge.cv2_to_imgmsg(resized_image)
+
+        self.modified_image_1_publish.publish(img_publish_1)
+        self.modified_image_2_publish.publish(img_publish_2)
+
         cv2.waitKey(1)
 
 

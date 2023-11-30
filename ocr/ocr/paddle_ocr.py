@@ -21,7 +21,8 @@ class Paddle_Ocr(Node):
         self.cv_bridge = CvBridge()
 
         # create subscriber to get image
-        self.cap = self.create_subscription(Image, "modified_image", self.image_reader, qos_profile=10)
+        self.cap_1 = self.create_subscription(Image, "modified_image_1", self.image_reader_1, qos_profile=10)
+        self.cap_2 = self.create_subscription(Image, "modified_image_2", self.image_reader_2, qos_profile=10)
 
         #declare and define parameters
         self.declare_parameter('ocr_frequency', 1)
@@ -32,19 +33,33 @@ class Paddle_Ocr(Node):
 
     def ocr_timer(self):
         """Call the ocr function"""
-        self.ocr_func(self.frame)
+        self.ocr_func_1(self.frame_1)
+        self.ocr_func_2(self.frame_2)
 
-    def ocr_func(self, frame):
+    def ocr_func_1(self, frame):
+        """Run OCR on the image frame"""
+        result = self.paddle_ocr.ocr(frame, cls=False)
+        # if result[0] != None:
+        #     self.guess_verification(result)
+        print(result)
+    
+    def ocr_func_2(self, frame):
         """Run OCR on the image frame"""
         result = self.paddle_ocr.ocr(frame, cls=False,  det=False, rec=True)
         # if result[0] != None:
         #     self.guess_verification(result)
         print(result)
 
-    def image_reader(self, msg):
+    def image_reader_1(self, msg):
         """Convert image to opencv format"""
-        self.frame = self.cv_bridge.imgmsg_to_cv2(msg)
-        cv2.imshow("read_image", self.frame)
+        self.frame_1 = self.cv_bridge.imgmsg_to_cv2(msg)
+        cv2.imshow("read_image_1", self.frame_1)
+        cv2.waitKey(1)
+    
+    def image_reader_2(self, msg):
+        """Convert image to opencv format"""
+        self.frame_2 = self.cv_bridge.imgmsg_to_cv2(msg)
+        cv2.imshow("read_image_2", self.frame_2)
         cv2.waitKey(1)
 
 def main(args=None):
