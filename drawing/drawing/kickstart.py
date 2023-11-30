@@ -56,6 +56,9 @@ class Kickstart(Node):
         self.cartesian_client = self.create_client(
             Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)
 
+        self.cal_state_subscriber = self.create_subscription(
+            String, 'cal_state', self.cal_state_callback, 10)
+
         # wait for clients' services to be available
         while not self.cal_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Calibrate service not available, waiting...')
@@ -64,7 +67,14 @@ class Kickstart(Node):
         while not self.movemp_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Move It MP service not available, waiting...')
 
+    def cal_state_callback(self, msg):
+        self.cal_state = msg
+
     async def kickstart_callback(self, request, response):
+        
+        return response
+
+    async def timer(self):
         # calibrate once -- call Ananya's stuff
         await self.cal_client.call_async(request=Empty.Request())
 
@@ -73,21 +83,22 @@ class Kickstart(Node):
         # set up position for each component (list of Mode and positions)
         ############# list for BoardTiles of incorrect letter dashes ##############
         # DASH 1:
-        request = BoardTiles.Request()
-        request.mode = 0
-        request.position = 0
-        request.x = [0.01, 0.05, 0.09, 0.09]
-        request.y = [0.0, 0.0, 0.0, 0.0]
-        request.onboard = [True, True, True, False]
+        if self.cal_state == "CALIBRATED":
+            request = BoardTiles.Request()
+            request.mode = 0
+            request.position = 0
+            request.x = [0.01, 0.05, 0.09, 0.09]
+            request.y = [0.0, 0.0, 0.0, 0.0]
+            request.onboard = [True, True, True, False]
 
-        pose_list = await self.tile_client.call_async(request)
+            pose_list = await self.tile_client.call_async(request)
 
-        request = Cartesian.Request()
-        request.poses = pose_list.origin_pose
+            request = Cartesian.Request()
+            request.poses = pose_list.origin_pose
 
-        self.get_logger().info(f"pose+list: {pose_list}")
+            self.get_logger().info(f"pose+list: {pose_list}")
 
-        await self.cartesian_client.call_async(request)
+            await self.cartesian_client.call_async(request)
 
         # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
         # for pose in pose_list.origin_pose:
@@ -125,8 +136,6 @@ class Kickstart(Node):
         # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
 
         # use graham's code to queue each section of components
-
-        return response
 
 
 def main(args=None):

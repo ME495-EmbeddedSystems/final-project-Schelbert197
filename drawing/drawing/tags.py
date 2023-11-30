@@ -73,7 +73,7 @@ class Tags(Node):
         self.timer = self.create_timer(1 / self.freq, self.timer_callback)
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
-        self.grid = Grid((0, 80), (0, 60), 10)
+        self.grid = Grid((0, .80), (0, .60), .10)
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
@@ -111,6 +111,13 @@ class Tags(Node):
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
 
+        
+        self.robot_board_write = TransformStamped()
+        self.robot_board_write.header.frame_id = "panda_link0"
+        self.robot_board_write.child_frame_id = "point"
+        self.robot_board_write.header.stamp = self.get_clock().now().to_msg()
+        
+        
         # wait for services
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
@@ -184,19 +191,42 @@ class Tags(Node):
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
 
+        x, y = request.x[0], request.y[0]
+        z = 0.20
+        
+        Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
+                            [ 0.06784999,  0.05540183, -0.99615612,  y],
+                            [-0.9969137 , -0.03575537, -0.06989015,  z],
+                            [ 0.  ,        0.  ,        0. ,         1.  ]]
+                            )
+        Tra = Trl @ Tla
+        position, rotation = self.matrix_to_position_quaternion(Tra, 1)
+        pos.position = position
+        pos.orientation = rotation
+
+        response_a.append(pos)
+
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
-            z = 0.15 if request.onboard[i] else 0.03
-            Tla = np.array([[0, 1, 0, x],
-                            [1, 0, 0, y],
-                            [0, 0, -1, z],
-                            [0, 0, 0, 1]])
+            z = 0.2 if request.onboard[i] else 0.15
+
+            # Tla = np.array([[0, 1, 0, x],
+            #                 [0.5,  0.0 ,        -0.8660254, y],
+            #                 [-0.8660254,  0.0  , -0.5, z],
+            #                 [0, 0, 0, 1]])
+            
+            Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
+                            [ 0.06784999,  0.05540183, -0.99615612,  y],
+                            [-0.9969137 , -0.03575537, -0.06989015,  z],
+                            [ 0.  ,        0.  ,        0. ,         1.  ]]
+                            )
             Tra = Trl @ Tla
             position, rotation = self.matrix_to_position_quaternion(Tra, 1)
             pos.position = position
             pos.orientation = rotation
 
             response_a.append(pos)
+        self.robot_board_write.transform.translation , self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(Tra)
         self.get_logger().info("where_to_write3")
         response.origin_pose = response_a
         return response
@@ -316,10 +346,16 @@ class Tags(Node):
                 self.goal_state = "not"
                 self.get_logger().info(f'Trb: {pos,rotation}')
 
+        
+        # ansTi, ansRi = self.get_transform('board', 'panda_hand_tcp')
+        # pls = self.array_to_transform_matrix(ansTi, ansRi)
+        # self.get_logger().info(f'{pls}')
         if self.state == State.OTHER:
             msg.data = "CALIBRATED"
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
+        self.robot_board_write.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
+        self.broadcaster.sendTransform(self.robot_board_write)
         self.state_publisher.publish(msg)
 
 
