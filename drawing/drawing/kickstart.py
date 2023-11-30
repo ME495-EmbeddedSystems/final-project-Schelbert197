@@ -83,22 +83,22 @@ class Kickstart(Node):
         # set up position for each component (list of Mode and positions)
         ############# list for BoardTiles of incorrect letter dashes ##############
         # DASH 1:
-        if self.cal_state == "CALIBRATED":
-            request = BoardTiles.Request()
-            request.mode = 0
-            request.position = 0
-            request.x = [0.01, 0.05, 0.09, 0.09]
-            request.y = [0.0, 0.0, 0.0, 0.0]
-            request.onboard = [True, True, True, False]
+        # if self.cal_state == "CALIBRATED":
+        request = BoardTiles.Request()
+        request.mode = 0
+        request.position = 0
+        request.x = [0.01, 0.05, 0.09, 0.09]
+        request.y = [0.0, 0.0, 0.0, 0.0]
+        request.onboard = [True, True, True, False]
 
-            pose_list = await self.tile_client.call_async(request)
+        pose_list = await self.tile_client.call_async(request)
+        self.get_logger().info("where_to_write done")
+        request = Cartesian.Request()
+        request.poses = pose_list.origin_pose
 
-            request = Cartesian.Request()
-            request.poses = pose_list.origin_pose
+        self.get_logger().info(f"pose+list: {pose_list}")
 
-            self.get_logger().info(f"pose+list: {pose_list}")
-
-            await self.cartesian_client.call_async(request)
+        await self.cartesian_client.call_async(request)
 
         # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
         # for pose in pose_list.origin_pose:
