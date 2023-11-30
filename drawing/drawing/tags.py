@@ -223,7 +223,7 @@ class Tags(Node):
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
-            z = 0.2 if request.onboard[i] else 0.15
+            z = 0.01 if request.onboard[i] else 0.2
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],

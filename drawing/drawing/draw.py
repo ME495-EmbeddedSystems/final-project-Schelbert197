@@ -276,6 +276,7 @@ class Drawing(Node):
         self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
 
         self.plan_future = Future()
+        self.execute_future = Future()
 
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
@@ -309,6 +310,7 @@ class Drawing(Node):
         # self.letter_start_point.y = request.start_point.y
         # self.letter_start_point.z = request.start_point.z
         self.plan_future = Future()
+        self.execute_future = Future()
 
         self.cartesian_mp_queue += request.poses
         self.state = State.PLAN_CARTESIAN_MOVE
@@ -495,7 +497,7 @@ class Drawing(Node):
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 joint_trajectories)
-            self.execute_future = Future()
+            # self.execute_future = Future()
             await self.execute_future
             # self.joint_traj_pub.publish(joint_trajectories)
 
@@ -518,9 +520,13 @@ class Drawing(Node):
             ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
+            
+            self.get_logger().info(f"future result: {self.execute_future.result()}")
 
-            if self.execute_future.done():
-                self.plan_future.set_result("done")
+            if self.execute_future.result() is not None:
+                if self.execute_future.result().result == "done":
+                    self.plan_future.set_result("done")
+                    self.get_logger().info("done does not work")
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
