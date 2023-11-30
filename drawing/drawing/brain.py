@@ -6,8 +6,8 @@ from std_srvs.srv import Empty
 from std_msgs.msg import Bool
 from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextToPath
-from brain_interfaces.msg import Cartesian
-from brain_interfaces.srv import BoardTiles
+# from brain_interfaces.msg import Cartesian
+from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
 from gameplay_interfaces.msg import LetterMsg
 # from character_interfaces.alphabet import alphabet
 from geometry_msgs.msg import Pose, Point, Quaternion
@@ -35,24 +35,32 @@ class Brain(Node):
         self.create_timer(0.01, self.timer_callback, self.timer_callback_group)
 
         # create publishers
-
         self.moveit_mp_pub = self.create_publisher(
             Pose, '/moveit_mp', 10)
 
-        self.cartesian_mp_pub = self.create_publisher(
-            Cartesian, '/cartesian_mp', 10)
+        # self.cartesian_mp_pub = self.create_publisher(
+        #     Cartesian, '/cartesian_mp', 10)
 
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
 
-        # create services
-
+        # create service
         self.test_service = self.create_service(
             Empty, '/test_brain', self.test_service_callback)
-        self.board_service = self.create_client(
-            BoardTiles, '/board_tiles')  # create custom service type
-        self.ocr_service = self.create_service(
-            Empty, '/ocr_service', self.test_service_callback)
+        
+        # Create clients
+        self.board_service_client = self.create_client(
+            BoardTiles, '/where_to_write')  # create custom service type
+        self.calibrate_service_client = self.create_client(
+            Empty, 'calibrate')  # create custom service type
+        self.movepose_service_client = self.create_client(
+            MovePose, '/moveit_mp')  # create custom service type
+        self.cartesian_mp_service_client = self.create_client(
+            Cartesian, '/cartesian_mp')  # create custom service type
+        self.kickstart_service_client = self.create_client(
+            Empty, '/kickstart')
+        # self.ocr_service = self.create_service(
+        #     Empty, '/ocr_service', self.test_service_callback)
 
         # Create subscription from hangman.py
         self.hangman = self.create_subscription(
@@ -205,7 +213,7 @@ class Brain(Node):
             # TODO We will need to consider asynchronicity, but this is the flow of info
             for j in range(0, len(self.last_message.positions)):
                 # Ananya's code gives origin for the tile that we are working in reference to (taking the mode group and position in group)
-                self.tile_pose: Pose = self.board_service.call_async(
+                self.tile_pose: Pose = self.board_service_client.call_async(
                     self.last_message.mode, self.last_message.positions[j])
 
                 # Coords to poses takes in the letter and the pose from the board and returns a list of poses for the trajectory
