@@ -13,6 +13,7 @@ from gameplay_interfaces.msg import LetterMsg
 from geometry_msgs.msg import Pose, Point, Quaternion
 
 from enum import Enum, auto
+import numpy as np
 
 
 class State(Enum):
@@ -66,26 +67,59 @@ class Brain(Node):
             orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
         )
         self.alphabet = {}
-        self.scale_factor = 0.01
+        self.scale_factor = 0.001
 
         self.state = State.INITIALIZE
 
     def create_letters(self):
         """Create the dictionary of bubble letters"""
 
-        letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0|-/_'
         for i in range(0, len(letters)):
             letter = letters[i]
-            fp = FontProperties(family="MS Gothic", style="normal")
-            verts, codes = TextToPath().get_text_path(fp, letters[i])
-            xlist = []
-            ylist = []
-            for j in range(0, len(verts) - 1):
-                # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
-                xlist.append(verts[j][0])
-                ylist.append(verts[j][1])
-            point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
-            self.alphabet.update(point_dict)
+            if letter == '0': # Head of man
+                xvec=[]
+                yvec=[]
+                q = 25
+                for t in range(0,q+1):
+                    x = 50*np.cos(2*np.pi*t/q)
+                    y = 50+50*np.sin(2*np.pi*t/q)
+                    xvec.append(x*self.scale_factor)
+                    yvec.append(y*self.scale_factor)
+                point_dict = {letter: {'xlist': xvec, 'ylist': yvec}}
+                self.alphabet.update(point_dict)
+            elif letter == '|': # Body of man
+                xlist = [0.0,0.0,0.0]
+                ylist = [0.1,0.05,0.002]
+                point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
+                self.alphabet.update(point_dict)
+            elif letter == '-': # Arms of man
+                xlist = [0.05,0.1,0.15]
+                ylist = [0.05,0.05,0.05]
+                point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
+                self.alphabet.update(point_dict)
+            elif letter == '/': # Leg of man 1
+                xlist = [0.1,0.075,0.05]
+                ylist = [0.1,0.06,0.02]
+                point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
+                self.alphabet.update(point_dict)
+            elif letter == '_': # Leg of man 2
+                xlist = [0.0,0.025,0.05]
+                ylist = [0.1,0.06,0.02]
+                point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
+                self.alphabet.update(point_dict)
+            else: # All letters of alphabet
+                fp = FontProperties(family="MS Gothic", style="normal")
+                verts, codes = TextToPath().get_text_path(fp, letters[i])
+                xlist = []
+                ylist = []
+                for j in range(0, len(verts) - 1):
+                    # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
+                    xlist.append(verts[j][0]*self.scale_factor)
+                    ylist.append(verts[j][1]*self.scale_factor)
+                point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
+                self.alphabet.update(point_dict)
+        
 
     def coords_to_poses(self, letter, tilepose: Pose):
         # get the coordiantes for the letter from the dictionary
@@ -97,15 +131,15 @@ class Brain(Node):
             if xcoord[i] > 0 and ycoord[i] > 0:
                 p = Point(x=tilepose.position.x,
                           y=tilepose.position.y +
-                          (xcoord[i] * self.scale_factor),
-                          z=tilepose.position.z + (ycoord[i] * self.scale_factor))
+                          (xcoord[i]),
+                          z=tilepose.position.z + (ycoord[i]))
                 quat = tilepose.orientation
                 point_pose = Pose(position=p, orientation=quat)
             else:
                 p = Point(x=tilepose.position.x - 0.2,
                           y=tilepose.position.y +
-                          (xcoord[i] * self.scale_factor),
-                          z=tilepose.position.z + (ycoord[i] * self.scale_factor))
+                          (xcoord[i]),
+                          z=tilepose.position.z + (ycoord[i]))
                 quat = tilepose.orientation
                 point_pose = Pose(position=p, orientation=quat)
             poses.append(point_pose)
