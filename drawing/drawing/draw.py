@@ -158,9 +158,12 @@ class Drawing(Node):
 
         self.gripper_mass = 0.73  # kg
         self.g = 9.81  # m/s**2
-        # this is the position vector of the center of mass of the end effector
-        # from panda_link6
-        self.p6e = np.array([-0.01, 0, 0.03])
+
+        # position of the center of mass of the end-effector
+        # in the panda_hand frame
+        self.pc = np.array([-0.01, 0, 0.03])
+        # position of the tip of the end-effector in the panda_hand frame
+        self.pe = np.array([0, 0, 0.1034])
 
         self.force_offset = 0.0  # N
         self.force_threshold = 3.0  # N
@@ -201,13 +204,44 @@ class Drawing(Node):
 
         Tw6, Rw6 = self.array_to_transform_matrix(pw6, quaternion_w6)
 
-        Fw = np.array([0, 0, self.gripper_mass * self.g])
-        F6 = Rw6 @ Fw
-        M6 = F6 * self.p6e
+        p6f, quaternion_6f = self.get_transform('panda_link6', 'panda_hand')
 
-        joint_torque_offset = M6[2] * 10
+        T6f, R6f = self.array_to_transform_matrix(p6f, quaternion_6f)
+
+        Fw = np.array([0, 0, -self.gripper_mass * self.g])
+        F6 = np.linalg.inv(Rw6) @ Fw
+        M6 = F6 * (p6f + R6f @ self.pc)
+
+        joint_torque_offset = M6[2]
+
+        self.get_logger().info(f"M6: {M6}")
 
         return joint_torque_offset
+
+    def calc_ee_force(self, effort_joint6):
+
+        pe6, quaternion_e6 = self.get_transform(
+            'panda_hand_tcp', 'panda_link6')
+
+        Te6, Re6 = self.array_to_transform_matrix(pe6, quaternion_e6)
+
+        p6e, quaternion_6e = self.get_transform(
+            'panda_link6', 'panda_hand_tcp')
+
+        T6e, R6e = self.array_to_transform_matrix(p6e, quaternion_6e)
+
+        M6 = np.array([0, 0, effort_joint6])
+        Fe = np.divide(Re6 @ M6, p6e,  # wrong
+                       out=np.zeros_like(M6), where=M6 != 0)
+
+        pwe, quaternion_we = self.get_transform(
+            'panda_link0', 'panda_hand_tcp')
+
+        Twe, Rwe = self.array_to_transform_matrix(pwe, quaternion_we)
+
+        Fw = Rwe @ Fe
+
+        return Fw
 
     def execute_trajectory_status_callback(self, msg):
 
@@ -381,7 +415,8 @@ class Drawing(Node):
                 self.calibration_counter += 1
 
             self.force_offset = self.force_offset/calibration_cycles
-            self.get_logger().info(f"force offset complete: {self.force_offset}")
+            self.get_logger().info(
+                f"force offset complete: {self.force_offset}")
             self.state = State.WAITING
 
         elif self.state == State.PLAN_MOVEGROUP:
@@ -452,10 +487,14 @@ class Drawing(Node):
                     self.ee_force = self.path_planner.current_joint_state.effort[5] / (
                         self.L1 + self.L2)
 
+            joint_torque_offset = self.calc_joint_torque_offset()
+
+            # self.get_logger().info(
+            #     f"joint torque in panda_joint6: {self.path_planner.current_joint_state.effort[5]}")
+            # self.get_logger().info(
+            #     f"joint torque offset: {self.calc_joint_torque_offset()}")
             self.get_logger().info(
-                f"joint torque in panda_joint6: {self.path_planner.current_joint_state.effort[5]}")
-            self.get_logger().info(
-                f"joint torque offset: {self.calc_joint_torque_offset()}")
+                f"force at ee: {self.calc_ee_force(self.path_planner.current_joint_state.effort[5] - joint_torque_offset)}")
 
             ee_force_msg = EEForce()
             ee_force_msg.ee_force = self.ee_force
