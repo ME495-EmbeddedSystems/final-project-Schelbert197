@@ -80,7 +80,7 @@ class Executor(Node):
     def timer_callback(self):
 
         # if force is above threshold, stop executing.
-        if self.ee_force > self.ee_force_threshold:
+        if self.ee_force > self.ee_force_threshold and not self.use_force_control:
             self.get_logger().info(
                 f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
             self.joint_trajectories.clear()
