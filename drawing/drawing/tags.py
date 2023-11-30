@@ -204,7 +204,7 @@ class Tags(Node):
         pos.position = position
         pos.orientation = rotation
 
-        response_a.append(pos)
+        response.inital_pose = pos
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
@@ -228,7 +228,7 @@ class Tags(Node):
             response_a.append(pos)
         self.robot_board_write.transform.translation , self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(Tra)
         self.get_logger().info("where_to_write3")
-        response.origin_pose = response_a
+        response.pose_list = response_a
         return response
 
     async def calibrate_callback(self, request, response):
