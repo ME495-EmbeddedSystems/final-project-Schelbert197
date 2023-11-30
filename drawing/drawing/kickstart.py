@@ -101,6 +101,68 @@ class Kickstart(Node):
             await self.cartesian_client.call_async(request2)
 
         return response
+    
+    async def draw_component(self,mode,position):
+        # take in mode and position and draw component accordingly
+        
+        # if mode = 0 or 1 then drawing dashes
+        dash_x = [0.01, 0.05, 0.09, 0.09]
+        dash_y = [0.0, 0.0, 0.0, 0.0]
+        dash_on = [True, True, True, False]
+
+        # if mode = 3 then drawing stand
+        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.45]
+        stand_on = [True, True, True, True, True, True, True, True, True, True, False]
+
+        if mode == 0 or mode == 1:
+            # fill in dash info
+            tile_req = BoardTiles.Request()
+            tile_req.mode = mode
+            tile_req.position = position
+            tile_req.x = dash_x
+            tile_req.y = dash_y
+            tile_req.onboard = dash_on
+
+            # denote pose_list and initial_pose from BoardTiles response
+            resp = await self.tile_client.call_async(tile_req)
+            # pose1 = resp.initial_pose
+            pose_list = resp.pose_list
+            self.get_logger().info(f"Pose List for Dash: {pose_list}")
+
+            # draw dashes with Cartesian mp
+            for pose in pose_list:
+                self.get_logger().info(f'{pose}')
+                cart_req = Cartesian.Request()
+                cart_req.target_pose = pose
+                await self.cartesian_client.call_async(cart_req)
+        
+        if mode == 3:
+            # fill in stand info
+            tile_req = BoardTiles.Request()
+            tile_req.mode = mode
+            tile_req.position = position
+            tile_req.x = stand_x
+            tile_req.y = stand_y
+            tile_req.onboard = stand_on
+
+            # denote pose_list and initial_pose from BoardTiles response
+            resp = await self.tile_client.call_async(tile_req)
+            # pose1 = resp.initial_pose
+            pose_list = resp.pose_list
+            self.get_logger().info(f"Pose List for Stand: {pose_list}")
+
+            # draw stand with Cartesian mp
+            for pose in pose_list:
+                self.get_logger().info(f'{pose}')
+                cart_req = Cartesian.Request()
+                cart_req.target_pose = pose
+                await self.cartesian_client.call_async(cart_req)
+
+
+
+        
+
 
     # async def timer_callback(self):
     #     # calibrate once -- call Ananya's stuff
