@@ -484,8 +484,9 @@ class Drawing(Node):
 
             joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
-            self.future = self.joint_trajectories_client.call_async()
-            self.joint_traj_pub.publish(joint_trajectories)
+            self.future = self.joint_trajectories_client.call_async(
+                joint_trajectories)
+            # self.joint_traj_pub.publish(joint_trajectories)
 
             self.state = State.WAITING
 
