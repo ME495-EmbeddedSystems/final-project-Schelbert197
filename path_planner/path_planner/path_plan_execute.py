@@ -318,7 +318,7 @@ class Path_Plan_Execute():
         self.cartesian_path_request.avoid_collisions = True
         self.cartesian_path_request.max_velocity_scaling_factor = 0.1
         self.cartesian_path_request.max_acceleration_scaling_factor = 0.1
-        self.cartesian_path_request.path_constraints.orientation_constraint = []
+        # self.cartesian_path_request.path_constraints.orientation_constraint = []
         # self.node.get_logger().info(f"request: {self.cartesian_path_request}")
 
         cartesian_trajectory_result = await self.cartesian_path_client.call_async(self.cartesian_path_request)

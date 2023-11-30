@@ -94,8 +94,8 @@ class Tags(Node):
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
 
         # create subscribers
-        self.goal_reach_sub = self.create_subscription(
-            String, 'execute_trajectory_status', self.goal_reach_sub_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
+        # self.goal_reach_sub = self.create_subscription(
+        #     String, 'execute_trajectory_status', self.goal_reach_sub_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
         self.goal_state = "not"
 
         # create client
@@ -119,6 +119,10 @@ class Tags(Node):
         self.robot_board_write.header.frame_id = "panda_link0"
         self.robot_board_write.child_frame_id = "point"
         self.robot_board_write.header.stamp = self.get_clock().now().to_msg()
+        
+        
+        #Transform to save the robot to board transform
+        self.boardT = np.eye(4)
 
 
     # Create a new Future object.
@@ -129,10 +133,10 @@ class Tags(Node):
             self.get_logger().info(
                 'Move Joint State service not available, waiting again...')
 
-    def goal_reach_sub_callback(self, msg):
-        if msg == "done":
-            self.future_satate.set_result("done")
-        self.get_logger().info("subs")
+    # def goal_reach_sub_callback(self, msg):
+    #     if msg == "done":
+    #         self.future_satate.set_result("done")
+    #     self.get_logger().info("subs")
 
     def make_transform(self):
 
@@ -189,8 +193,12 @@ class Tags(Node):
         response_a = []
         pos = Pose()
         self.get_logger().info("where_to_write2")
-        ansT, ansR = self.get_transform('panda_link0', 'board')
-        Trb = self.array_to_transform_matrix(ansT, ansR)
+        # ansT, ansR = self.get_transform('panda_link0', 'board')
+        # ansT = self.robot_board.transform.translation
+        # ansR = self.robot_board.transform.rotation
+        # self.get_logger().info(f'board : {ansT, ansR}')
+        # Trb = self.array_to_transform_matrix(ansT, ansR)
+        Trb = self.boardT 
         lx, ly = self.grid.grid_to_world(request.mode, request.position)
         Tbl = np.array([[1, 0, 0, lx],
                         [0, 1, 0, ly],
@@ -210,7 +218,7 @@ class Tags(Node):
         position, rotation = self.matrix_to_position_quaternion(Tra, 1)
         pos.position = position
         pos.orientation = rotation
-
+        self.robot_board_write.transform.translation , self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(Tra)
         response.inital_pose = pos
 
         for i in range(len(request.x)):
@@ -233,7 +241,7 @@ class Tags(Node):
             pos.orientation = rotation
 
             response_a.append(pos)
-        self.robot_board_write.transform.translation , self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(Tra)
+        
         self.get_logger().info("where_to_write3")
         response.pose_list = response_a
         return response
@@ -261,8 +269,8 @@ class Tags(Node):
         ansT, ansR = await self.future
         while ansT[0] == 0.0:
             ansT, ansR = await self.future
-            self.get_logger().info(f"{ansT, ansR}")
-            self.get_logger().info('value set in service')
+            # self.get_logger().info(f"{ansT, ansR}")
+            # self.get_logger().info('value set in service')
         # if ansT[0] != 0.0:
         Ttb = np.array([[1, 0, 0, 0.05],
                         [0, 1, 0, 0.05],
@@ -272,6 +280,7 @@ class Tags(Node):
         Trt = self.array_to_transform_matrix(ansT, ansR)
 
         Trb = Trt @ Ttb
+        self.boardT = Trt
         self.get_logger().info(f'Trb: \n{Trb}')
         pos, rotation = self.matrix_to_position_quaternion(Trb)
         self.get_logger().info(f'Trt: \n{Trt}')

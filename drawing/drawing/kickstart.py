@@ -85,20 +85,20 @@ class Kickstart(Node):
 
         # denote pose_list and initial_pose from BoardTiles response
         resp = await self.tile_client.call_async(request)
-        pose1 = resp.initial_pose
+        pose1 = resp.inital_pose
         pose_list = resp.pose_list
 
         self.get_logger().info(f"Pose List for Dash: {pose_list}")
     
         # FIRST TIME MOVING TO BOARD - MOVEIT_MP
         # move robot to first pose in front of dash origin - moveit_mp
-        await self.movemp_client.call_async(pose1)
+        request2 = MovePose.Request()
+        request2.target_pose = pose1
+        await self.movemp_client.call_async(request2)
         # draw remaining pose dashes with Cartesian mp
-        for pose in pose_list:
-            self.get_logger().info(f'{pose}')
-            request2 = Cartesian.Request()
-            request2.target_pose = pose
-            await self.cartesian_client.call_async(request2)
+        request3 = Cartesian.Request()
+        request3.poses = pose_list
+        await self.cartesian_client.call_async(request3)
 
         return response
 
