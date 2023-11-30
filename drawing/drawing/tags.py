@@ -248,10 +248,15 @@ class Tags(Node):
         # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
         goal_js.target_pose.position = Point(x=0.30744234834406486, y=-0.17674628233240325,z= 0.5725350884705022)
         goal_js.target_pose.orientation = Quaternion(x= 0.7117299678289105, y= -0.5285053338340909, z= 0.268057323473255, w= 0.37718408812611504)
+        ##################### moving to the position#################### 
+        self.get_logger().info('before moved')
         ans = await self.move_js_client.call_async(goal_js)
-        self.goal_state = await self.future_satate
-        while self.goal_state != "done":
-            self.goal_state = await self.future_satate
+        self.goal_state = "done"
+        self.get_logger().info('moved')
+        # self.goal_state = await self.future_satate
+        
+        ################3when its done start doing calibrate sequence
+       
         
         ansT, ansR = await self.future
         while ansT[0] == 0.0:
@@ -367,7 +372,7 @@ class Tags(Node):
         # self.get_logger().info(f'hand: {self.array_to_transform_matrix(ans1T, ans1R)}')
         
         # self.get_logger().info("timmer function")
-        if self.state == State.CALIBRATE:
+        if self.state == State.CALIBRATE and self.goal_state == "done":
            
             self.get_logger().info('function done')
             ansT, ansR = self.get_transform('panda_link0', 'tag11')

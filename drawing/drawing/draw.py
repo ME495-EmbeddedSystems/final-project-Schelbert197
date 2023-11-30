@@ -151,7 +151,8 @@ class Drawing(Node):
 
         self.font_size = 0.1
 
-        self.future = Future()
+        self.plan_future = Future()
+        self.execute_future = Future()
 
         self.moveit_mp_queue = []  # moveit motion planner queue
         self.cartesian_mp_queue = []  # cartesian motion planner queue
@@ -277,8 +278,9 @@ class Drawing(Node):
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
         self.use_force_control = False
-
-        await self.future
+        self.get_logger().info('before future')
+        await self.plan_future
+        self.get_logger().info('after future ####################################################################')
 
         return response
 
@@ -484,8 +486,10 @@ class Drawing(Node):
 
             joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
-            self.future = self.joint_trajectories_client.call_async(
+            self.execute_future = self.joint_trajectories_client.call_async(
                 joint_trajectories)
+            
+            await self.execute_future
             # self.joint_traj_pub.publish(joint_trajectories)
 
             self.state = State.WAITING
@@ -507,6 +511,9 @@ class Drawing(Node):
             ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
+            
+            if self.execute_future.done():
+                self.plan_future.set_result("done")
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
