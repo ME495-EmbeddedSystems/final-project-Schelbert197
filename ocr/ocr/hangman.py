@@ -31,6 +31,7 @@ class Hangman(Node):
         self.game_won = False
         self.user_guess = None
         self.Alphabet = {}
+        self.man_list = ['0','|','-','/','_']
 
         # Create Timer
         self.timer = self.create_timer(0.01, self.timer_callback)
@@ -101,8 +102,8 @@ class Hangman(Node):
                 self.get_logger().info('word incorrect')
                 # write hangman parts only
                 mode_list.append(2)
-                position_list.append(len(self.current_wrong_guesses))
-                letter_list.append(0)
+                position_list.append(self.current_wrong_guesses)
+                letter_list.append(self.man_list[self.current_wrong_guesses])
                 self.current_wrong_guesses += 1
         elif len(guess) == 1 and upper_guess not in self.guessed_letters:
             if upper_guess in self.word:
@@ -120,11 +121,11 @@ class Hangman(Node):
                 # write wrong letter
                 letter_list.append(upper_guess)
                 mode_list.append(0)
-                position_list.append(len(self.current_wrong_guesses))
+                position_list.append(len(self.guessed_letters))
                 # write hangman
-                letter_list.append(0)
+                letter_list.append(self.man_list[self.current_wrong_guesses])
                 mode_list.append(2)
-                position_list.append(len(self.current_wrong_guesses))
+                position_list.append(self.current_wrong_guesses)
                 # increment wrong guesses
                 self.current_wrong_guesses += 1
         else:
