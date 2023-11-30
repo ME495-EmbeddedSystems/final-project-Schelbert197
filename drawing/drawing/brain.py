@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from std_srvs.srv import Empty
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextToPath
 # from brain_interfaces.msg import Cartesian
@@ -38,15 +38,11 @@ class Brain(Node):
         self.moveit_mp_pub = self.create_publisher(
             Pose, '/moveit_mp', 10)
 
-        # self.cartesian_mp_pub = self.create_publisher(
-        #     Cartesian, '/cartesian_mp', 10)
+        self.state_pub = self.create_publisher(
+            String, '/brain_states', 10) # maybe use this to publish the states
 
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
-
-        # create service
-        self.test_service = self.create_service(
-            Empty, '/test_brain', self.test_service_callback)
         
         # Create clients
         self.board_service_client = self.create_client(
@@ -59,14 +55,14 @@ class Brain(Node):
             Cartesian, '/cartesian_mp')  # create custom service type
         self.kickstart_service_client = self.create_client(
             Empty, '/kickstart')
-        # self.ocr_service = self.create_service(
-        #     Empty, '/ocr_service', self.test_service_callback)
 
         # Create subscription from hangman.py
         self.hangman = self.create_subscription(
             LetterMsg, '/writer', callback=self.hangman_callback, qos_profile=10)
         self.home = self.create_subscription(
             Bool, '/RTH', callback=self.home_callback, qos_profile=10)
+        self.trajectory_status = self.create_subscription(
+            String, '/execute_trajectory_status',callback=self.trajectory_status_callback, qos_profile=10)
 
         # define global variables
 
@@ -78,7 +74,11 @@ class Brain(Node):
         self.scale_factor = 0.001
         self.shape_list = []
         self.current_mp_pose = Pose()
+        self.current_traj_poses = []
         self.current_shape_poses = []
+        self.kick_future = None
+        self.calibrate_future = None
+        self.board_future = None
 
         self.state = State.INITIALIZE
 
@@ -132,29 +132,6 @@ class Brain(Node):
                 self.alphabet.update(point_dict)
         
 
-    def coords_to_poses(self, letter, tilepose: Pose):
-        # get the coordiantes for the letter from the dictionary
-        xcoord = self.alphabet[letter]['xlist']
-        ycoord = self.alphabet[letter]['ylist']
-        poses = []
-        # TODO: write a for loop to create a list of Pose() from the coords
-        for i in range(0, len(xcoord)):
-            if xcoord[i] > 0 and ycoord[i] > 0:
-                p = Point(x=tilepose.position.x,
-                          y=tilepose.position.y +
-                          (xcoord[i]),
-                          z=tilepose.position.z + (ycoord[i]))
-                quat = tilepose.orientation
-                point_pose = Pose(position=p, orientation=quat)
-            else:
-                p = Point(x=tilepose.position.x - 0.2,
-                          y=tilepose.position.y +
-                          (xcoord[i]),
-                          z=tilepose.position.z + (ycoord[i]))
-                quat = tilepose.orientation
-                point_pose = Pose(position=p, orientation=quat)
-            poses.append(point_pose)
-
     def process_letter_points(self, letter):
         """ Function to make it easier to prepare letters for board tile type"""
         xcoord = self.alphabet[letter]['xlist']
@@ -177,14 +154,16 @@ class Brain(Node):
                 board_bool.append(False)
         return board_x, board_y, board_bool
 
-    def test_service_callback(self, request, response):
-
-        self.state = State.LETTER
-
-        return response
-
-    # def board_service_callback(self, request, response):
-    #     """Callback for the service to get the board tile pose"""
+    def trajectory_status_callback(self, msg: String):
+        """Callback for the service to get execute the drawing on the board"""
+        new_msg = msg
+        if new_msg == 'done':
+            # Remove the first instance in the shape list since it was just executed
+            self.shape_list.pop[0]
+            # Return to letter writing to see if more things need to be written
+            self.state = State.LETTER
+        else:
+            self.get_logger().error("An error occured and the trajectory did not return done.")
 
     def hangman_callback(self, msg: LetterMsg):
         """Callback when feedback is given from hangman"""
@@ -215,45 +194,68 @@ class Brain(Node):
 
     def timer_callback(self):
         if self.state == State.INITIALIZE:
-
+            # Initializes the kickstart feature then waits for completion
             self.kick_future = self.kickstart_service_client.call(Empty)
-
-            if self.kick_future:
-                # Moves to the waiting state once the robot has reached the home position
-                self.ocr_pub.publish(True)
-                self.state = State.WAITING
+            self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:
-
-            # TODO: we will need to add this client that calls the calibrate action
-            self.calibrate_service_client(Empty)
-            # This should send the camera calibration service as well
-            # TODO: Ananya can put this to have that service call how she prefers
-
-            # Moves to waiting state and listens for a return value to switch to letter
+            # Starts calibration then moves to waiting
+            self.calibrate_future = self.calibrate_service_client.call_async(Empty)
             self.state = State.WAITING
 
         elif self.state == State.APPROACHING:
-
-            # TODO: call the board service and switch to writing when where_to_write returns
-            self.movepose_service_client.call(self.current_mp_pose)
-
-            # Moves to the waiting state once we are setup, and waits for something to happen from hangman.py
-            self.state = State.WAITING
+            # Calls the service for the approach pose then moves to writing state
+            self.movepose_future = self.movepose_service_client.call_async(self.current_mp_pose)
+            self.state = State.WRITING
 
         elif self.state == State.LETTER:
             if self.shape_list:
                 # moves to the approaching state if there are still things to be written
-                
+                self.board_future = self.board_service_client.call_async(self.shape_list[0])
                 self.state = State.WAITING
             else:
+                # Turns on the OCR because the play has ended and returns to WAITING
                 self.ocr_pub.publish(True)
                 self.state = State.WAITING
 
         elif self.state == State.WAITING:
             # waiting state for writing actions
-            pass
+            if self.kick_future:
+                # Turns on OCR when kickstart finishes and waits for hangman callback
+                self.ocr_pub.publish(True)
+                self.kick_future = None
+            elif self.calibrate_future:
+                # Listens for a return value from calibration to switch to LETTER
+                self.state = State.LETTER
+                self.calibrate_future = None
+            elif self.board_future:
+                # Looks that board has returned values
+                # Assigns poses for approach and cartesian then moves to APPROACHING
+                self.current_mp_pose = self.board_future.initial_pose
+                self.current_traj_poses = self.board_future.pose_list
+                self.board_future = None
+                self.state = State.APPROACHING
+            else:
+                # If nothing has returned from client call, WAITING passes
+                pass
 
         elif self.state == State.WRITING:
-            # waiting state for the Franka to complete the cartesian trajectory before it moves back to letter
-            pass
+            # waiting state for the Franka to complete the mp and cartesian trajectories
+            # in 2 steps before it moves back to LETTER
+            if self.movepose_future:
+                self.cartesian_mp_service_client.call_async(self.current_traj_poses)
+                self.movepose_future = None
+            else:
+                pass
+            # Node will only leave this state once trajectory_status returns 'done'
+
+
+def main(args=None):
+    """ The node's entry point """
+    rclpy.init(args=args)
+    brain = Brain()
+    rclpy.spin(brain)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
