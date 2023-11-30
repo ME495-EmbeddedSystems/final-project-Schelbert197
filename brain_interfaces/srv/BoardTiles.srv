@@ -7,4 +7,5 @@ float64[] y
 bool[] onboard
 ---
 # returns a Pose
-geometry_msgs/Pose[] origin_pose
+geometry_msgs/Pose inital_pose
+geometry_msgs/Pose[] pose_list

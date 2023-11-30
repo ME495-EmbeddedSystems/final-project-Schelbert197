@@ -36,7 +36,7 @@ class Executor(Node):
             EEForce, '/ee_force', self.force_callback, 10)
         self.joint_trajectories = []
         self.ee_force = 0
-        self.ee_force_threshold = 1.5  # N
+        self.ee_force_threshold = 19  # N
         self.state = None
         self.clear = False
 
@@ -54,6 +54,8 @@ class Executor(Node):
         # self.get_logger().info(
         #     f"joint_trajectories: {self.joint_trajectories}")
         self.clear = msg.clear
+        
+        self.get_logger().info(f"msg.state: {msg.state}")
 
         if msg.state == "publish":
             self.state = State.PUBLISH
@@ -64,6 +66,7 @@ class Executor(Node):
 
         # if force is above threshold, stop executing.
         if self.ee_force > self.ee_force_threshold:
+            self.get_logger().info(f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
             self.joint_trajectories.clear()
             self.clear = False
 

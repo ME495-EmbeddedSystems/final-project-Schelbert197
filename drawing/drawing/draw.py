@@ -381,6 +381,7 @@ class Drawing(Node):
                 self.calibration_counter += 1
 
             self.force_offset = self.force_offset/calibration_cycles
+            self.get_logger().info(f"force offset complete: {self.force_offset}")
             self.state = State.WAITING
 
         elif self.state == State.PLAN_MOVEGROUP:
@@ -449,7 +450,7 @@ class Drawing(Node):
 
                 if self.path_planner.current_joint_state.effort:
                     self.ee_force = self.path_planner.current_joint_state.effort[5] / (
-                        self.L1 + self.L2) - self.force_offset
+                        self.L1 + self.L2)
 
             self.get_logger().info(
                 f"joint torque in panda_joint6: {self.path_planner.current_joint_state.effort[5]}")
