@@ -74,7 +74,7 @@ class Executor(Node):
         self.state = None
 
         self.distance = 0.01  # distance along quaternion to move
-        self.allowed_to_replan = True
+        self.replan = False
 
         self.future = Future()
 
@@ -92,6 +92,10 @@ class Executor(Node):
         self.poses = request.poses
         self.get_logger().info(f"initial poses: {self.poses}")
 
+        if self.replan:
+            update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses))
+            self.poses = update_trajectory_response.output_poses
+
         if request.state == "publish":
             self.state = State.PUBLISH
         else:
@@ -107,32 +111,14 @@ class Executor(Node):
 
         # if force is above threshold, stop executing.
         # self.get_logger().info(f"ee_force: {self.ee_force}")
-        if self.ee_force > self.ee_force_threshold and self.use_force_control and self.joint_trajectories and self.allowed_to_replan:
+        if self.ee_force > self.ee_force_threshold and self.use_force_control and self.joint_trajectories:
             self.get_logger().info(
                 f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
 
-            if len(self.poses) == 0:
-                self.joint_trajectories.clear()
-                self.get_logger().info("joint_trajectories cleared")
-            else:
-
-                self.get_logger().info("replanning paths")
-
-                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses))
-
-                self.get_logger().info("received update trajectory response")
-
-                new_poses = update_trajectory_response.output_poses
-
-                replan_response = await self.replan_client.call_async(Replan.Request(poses=new_poses))
-
-                self.joint_trajectories = replan_response.joint_trajectories
-                self.poses = new_poses
-
-                msg = String(data="Executing Trajectory!")
-                self.execute_trajectory_status_pub.publish(msg)
-
-                self.allowed_to_replan = False
+            self.joint_trajectories.clear()
+            self.replan = True
+            self.ee_force_threshold = self.ee_force + 0.5
+            self.get_logger().info("joint trajectories cleared")
 
         # if list of waypoints is not empty, publish to the topic that executes
         # trajectories oof the panda
