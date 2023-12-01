@@ -63,7 +63,10 @@ class Paddle_Ocr(Node):
         """Confirm whether the guess is a single letter or 6L word"""
         try:
             # check if the guess is a single letter
-            if isinstance(result[0][0][0],str) and len(result[0][0][0])== 1:
+            if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 1:
+                print(result[0][0][0])
+            # check if the guess is a six letter word
+            elif all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 6:
                 print(result[0][0][0])
         except:
             pass
