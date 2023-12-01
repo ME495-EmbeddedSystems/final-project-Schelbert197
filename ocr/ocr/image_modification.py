@@ -79,10 +79,19 @@ class ImageModification(Node):
 
             ret3,binarised = cv2.threshold(warped,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
             # cv2.imshow("binarised", binarised)
-            kernel = np.ones((13,13),np.uint8)
+            kernel = np.ones((7,7),np.uint8)
             dilation = cv2.dilate(binarised,kernel,iterations = 1)
             inverted_image = cv2.bitwise_not(dilation)
+            height,width = inverted_image.shape
+            border = int(0.1*min(height,width))
+            x1 = border
+            y1 = border
+            x2 = width - border
+            y2 = height - border
+            cropped = inverted_image[y1:y2,x1:x2]
             cv2.imshow("transformed", inverted_image)
+            cv2.imshow("cropped", cropped)
+
         except:
             pass
 
