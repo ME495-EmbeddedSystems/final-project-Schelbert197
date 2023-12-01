@@ -44,18 +44,18 @@ class Paddle_Ocr(Node):
     def ocr_timer(self):
         """Call the ocr function"""
         self.ocr_func_1(self.frame_1)
-        self.ocr_func_2(self.frame_2)
+        # self.ocr_func_2(self.frame_2)
 
     def ocr_func_1(self, frame):
         """Run OCR on the image frame"""
-        result = self.paddle_ocr.ocr(frame, cls=False)
+        result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         # if result[0] != None:
         #     self.guess_verification(result)
         print(result)
     
     def ocr_func_2(self, frame):
         """Run OCR on the image frame"""
-        result = self.paddle_ocr.ocr(frame, cls=False,  det=False, rec=True)
+        result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         # if result[0] != None:
         #     self.guess_verification(result)
         print(result)

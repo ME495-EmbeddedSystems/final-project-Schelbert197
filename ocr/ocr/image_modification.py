@@ -38,7 +38,7 @@ class ImageModification(Node):
     def image_modification(self, msg):
         """Convert image to opencv format"""
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
-        # cv2.imshow("image", self.frame)
+        cv2.imshow("image", self.frame)
         resized_image = imutils.resize(self.frame, height=500)
         # cv2.imshow("resized_image", resized_image)
         gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
@@ -85,15 +85,20 @@ class ImageModification(Node):
             x2 = width - border
             y2 = height - border
             cropped = warped[y1:y2,x1:x2]
+            cropped = cv2.GaussianBlur(cropped, (9, 9), 0)
             bin_thresh = cv2.getTrackbarPos('Bin_Thresh', 'Parameters')
-            ret3, binarised = cv2.threshold(cropped, bin_thresh, 255, cv2.THRESH_BINARY_INV)
+            # ret3, binarised = cv2.threshold(cropped, bin_thresh, 255, cv2.THRESH_BINARY_INV)
             # ret3,binarised = cv2.threshold(warped,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+            binarised = cv2.adaptiveThreshold(cropped,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,7,2)
             # cv2.imshow("binarised", binarised)
             kernel = np.ones((7,7),np.uint8)
             dilation = cv2.dilate(binarised,kernel,iterations = 1)
             inverted_image = cv2.bitwise_not(dilation)
             cv2.imshow("transformed", inverted_image)
             # cv2.imshow("cropped", cropped)
+            binary_image = cv2.bitwise_not(binarised)
+            img_publish_1 = self.cv_bridge.cv2_to_imgmsg(binary_image)
+            self.modified_image_1_publish.publish(img_publish_1)
 
             img_publish_2 = self.cv_bridge.cv2_to_imgmsg(inverted_image)
             self.modified_image_2_publish.publish(img_publish_2)
