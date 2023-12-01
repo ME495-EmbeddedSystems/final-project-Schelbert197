@@ -45,7 +45,7 @@ class Executor(Node):
             EEForce, '/ee_force', self.force_callback, 10)
         self.joint_trajectories = []
         self.ee_force = 0
-        self.ee_force_threshold = 3  # N
+        self.ee_force_threshold = 5  # N
         self.state = None
         self.clear = False
 
@@ -74,17 +74,20 @@ class Executor(Node):
             self.state = State.STOP
 
         await self.future
+        
+        self.future = Future()
 
         return response
 
     def timer_callback(self):
 
         # if force is above threshold, stop executing.
-        if self.ee_force > self.ee_force_threshold and not self.use_force_control:
+        if self.ee_force > self.ee_force_threshold and self.use_force_control:
             self.get_logger().info(
                 f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
             self.joint_trajectories.clear()
             self.clear = False
+            self.ee_force_threshold += 3
 
         if self.clear:
             self.joint_trajectories.clear()
@@ -111,6 +114,7 @@ class Executor(Node):
             self.execute_trajectory_status_pub.publish(msg)
 
             self.future.set_result("done")
+            self.get_logger().info("done executing!!")
 
             self.state = State.STOP
 

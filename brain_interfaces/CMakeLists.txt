@@ -24,6 +24,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 "srv/MovePose.srv"
 "srv/BoardTiles.srv"
 "srv/MoveJointState.srv"
+"srv/UpdateTrajectory.srv"
 DEPENDENCIES geometry_msgs sensor_msgs std_msgs trajectory_msgs
 )
 
