@@ -18,7 +18,7 @@ from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose
+from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -91,7 +91,8 @@ class Tags(Node):
             Empty, 'calibrate', self.calibrate_callback, callback_group=self.calibrate_callback_grp)
         self.where_to_write = self.create_service(
             BoardTiles, 'where_to_write', self.where_to_write_callback)
-        
+        self.update_trajectory = self.create_service(
+            UpdateTrajectory, 'update_trajectory', self.update_trajectory_callback)
 
         # create publishers
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
@@ -187,6 +188,54 @@ class Tags(Node):
         transform_matrix[:3, 3] = translation
 
         return transform_matrix
+    
+    async def calibrate_callback(self, request, response):
+        self.state = State.CALIBRATE
+        # ([], [])
+
+        goal_js = MovePose.Request()
+        # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
+        # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
+        goal_js.target_pose.position = Point(
+            x=0.30744234834406486, y=-0.17674628233240325, z=0.5725350884705022)
+        goal_js.target_pose.orientation = Quaternion(
+            x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504)
+        ##################### moving to the position####################
+        self.get_logger().info('before moved')
+        ans = await self.move_js_client.call_async(goal_js)
+        self.goal_state = "done"
+        self.get_logger().info('moved')
+        # self.goal_state = await self.future_satate
+
+        # 3when its done start doing calibrate sequence
+
+        ansT, ansR = await self.future
+        while ansT[0] == 0.0:
+            ansT, ansR = await self.future
+            # self.get_logger().info(f"{ansT, ansR}")
+            # self.get_logger().info('value set in service')
+        # if ansT[0] != 0.0:
+        Ttb = np.array([[1, 0, 0, 0.05],
+                        [0, 1, 0, 0.05],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+        # Ttb = np.array([0.063,0.063,0,1])
+        Trt = self.array_to_transform_matrix(ansT, ansR)
+
+        Trb = Trt @ Ttb
+        self.boardT = Trt
+        self.get_logger().info(f'Trb: \n{Trb}')
+        pos, rotation = self.matrix_to_position_quaternion(Trb)
+        self.get_logger().info(f'Trt: \n{Trt}')
+        self.get_logger().info(f'Trb: \n{Trb}')
+        self.robot_board.transform.translation = pos
+        self.robot_board.transform.rotation = rotation
+        # self.state = State.OTHER
+        self.goal_state = "not"
+        self.get_logger().info(f'Trb: {pos,rotation}')
+
+        self.get_logger().info("calibrate")
+        return response
 
     async def where_to_write_callback(self, request, response):
         self.get_logger().info("where_to_write1")
@@ -254,54 +303,32 @@ class Tags(Node):
         response.pose_list = response_a
         # self.get_logger().info(f'{response.pose_list}')
         return response
-
-    async def calibrate_callback(self, request, response):
-        self.state = State.CALIBRATE
-        # ([], [])
-
-        goal_js = MovePose.Request()
-        # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
-        # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
-        goal_js.target_pose.position = Point(
-            x=0.30744234834406486, y=-0.17674628233240325, z=0.5725350884705022)
-        goal_js.target_pose.orientation = Quaternion(
-            x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504)
-        ##################### moving to the position####################
-        self.get_logger().info('before moved')
-        ans = await self.move_js_client.call_async(goal_js)
-        self.goal_state = "done"
-        self.get_logger().info('moved')
-        # self.goal_state = await self.future_satate
-
-        # 3when its done start doing calibrate sequence
-
-        ansT, ansR = await self.future
-        while ansT[0] == 0.0:
-            ansT, ansR = await self.future
-            # self.get_logger().info(f"{ansT, ansR}")
-            # self.get_logger().info('value set in service')
-        # if ansT[0] != 0.0:
-        Ttb = np.array([[1, 0, 0, 0.05],
-                        [0, 1, 0, 0.05],
-                        [0, 0, 1, 0],
+    
+    def update_trajectory_callback(self,request,response):
+        pose_list = []
+        for pose in request.input_poses:
+            Trans_arr = [pose.position.x, pose.position.y,pose.position.z]
+            Rot_arr = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+            Tra = self.array_to_transform_matrix(Trans_arr, Rot_arr)
+            Trb = self.boardT
+            Tba = mr.TransInv(Trb)@Tra
+            update = np.array([[1, 0, 0, 0],
+                        [0, 1, 0, 0],
+                        [0, 0, 1, 0.001],
                         [0, 0, 0, 1]])
-        # Ttb = np.array([0.063,0.063,0,1])
-        Trt = self.array_to_transform_matrix(ansT, ansR)
-
-        Trb = Trt @ Ttb
-        self.boardT = Trt
-        self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(Trb)
-        self.get_logger().info(f'Trt: \n{Trt}')
-        self.get_logger().info(f'Trb: \n{Trb}')
-        self.robot_board.transform.translation = pos
-        self.robot_board.transform.rotation = rotation
-        # self.state = State.OTHER
-        self.goal_state = "not"
-        self.get_logger().info(f'Trb: {pos,rotation}')
-
-        self.get_logger().info("calibrate")
+            new_Tba = update@Tba 
+            new_Tra = Trb @ new_Tba
+            pos = Pose()
+            position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)
+            pos.position = position
+            pos.orientation = rotation
+            pose_list.append(pos)
+            
+        response.output_poses = pose_list
+        
         return response
+
+    
 
     def record_callback(self, request, response):
         At, Aq = self.get_transform('panda_link0', 'panda_hand_tcp')
