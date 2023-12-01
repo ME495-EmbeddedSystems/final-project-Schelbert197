@@ -213,6 +213,7 @@ class Tags(Node):
                         [-0.9969137, -0.03575537, -0.06989015,  z],
                         [0.,        0.,        0.,         1.]]
                        )
+        pos = Pose()
         Tra = Trl @ Tla
         position, rotation = self.matrix_to_position_quaternion(Tra, 1)
         pos.position = position
