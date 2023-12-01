@@ -91,6 +91,7 @@ class Tags(Node):
             Empty, 'calibrate', self.calibrate_callback, callback_group=self.calibrate_callback_grp)
         self.where_to_write = self.create_service(
             BoardTiles, 'where_to_write', self.where_to_write_callback)
+        
 
         # create publishers
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
