@@ -92,6 +92,9 @@ class ImageModification(Node):
             cv2.imshow("transformed", inverted_image)
             cv2.imshow("cropped", cropped)
 
+            img_publish_2 = self.cv_bridge.cv2_to_imgmsg(cropped)
+            self.modified_image_2_publish.publish(img_publish_2)
+
         except:
             pass
 

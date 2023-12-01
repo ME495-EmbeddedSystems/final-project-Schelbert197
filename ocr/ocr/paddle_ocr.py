@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
+import numpy as np
 
 from paddleocr import PaddleOCR
 
@@ -30,6 +31,15 @@ class Paddle_Ocr(Node):
 
         # create timer for calling the ocr function
         self.timer = self.create_timer(1.0/self.param_ocr_frequency, self.ocr_timer)
+
+        # Specify the size and type of the empty image
+        width, height = 640, 480
+        channels = 3
+        # Initialize an empty image with the specified size and type
+        empty_image = np.zeros((height, width, channels), dtype=np.uint8)
+
+        self.frame_1 = empty_image
+        self.frame_2 = empty_image
 
     def ocr_timer(self):
         """Call the ocr function"""
