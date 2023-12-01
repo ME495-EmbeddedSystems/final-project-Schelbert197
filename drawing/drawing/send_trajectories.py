@@ -163,7 +163,8 @@ class Executor(Node):
 
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
-            self.poses.pop(0)
+            if self.poses:
+                self.poses.pop(0)
 
             msg = String(data="Executing Trajectory!")
             self.execute_trajectory_status_pub.publish(msg)

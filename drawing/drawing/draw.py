@@ -176,7 +176,7 @@ class Drawing(Node):
         self.ee_force = 0.0  # N
         self.use_force_control = False
 
-        self.joint_trajectories = None
+        self.joint_trajectories = ExecuteJointTrajectories.Request()
 
         self.home_position = Pose(
             position=Point(x=-0.5, y=0.0, z=0.4),
@@ -442,24 +442,24 @@ class Drawing(Node):
             # here we figure out what the force offset should be by using an average.
             # we take 100 readings of the effort in panda_joint6, and take the average
             # to assign the force offset in the joint due to gravity.
-            self.get_logger().info(
-                f"self.use_fake_hardware: {self.use_fake_hardware}")
-            if self.use_fake_hardware:
-                self.state = State.WAITING
-                return
+            # self.get_logger().info(
+            #     f"self.use_fake_hardware: {self.use_fake_hardware}")
+            # if self.use_fake_hardware:
+            #     self.state = State.WAITING
+            #     return
 
             while not self.path_planner.current_joint_state.effort:
                 return
 
-            calibration_cycles = 100
-            while self.calibration_counter < calibration_cycles:
-                self.force_offset += self.path_planner.current_joint_state.effort[5] / (
-                    self.L1 + self.L2)
-                self.calibration_counter += 1
+            # calibration_cycles = 100
+            # while self.calibration_counter < calibration_cycles:
+            #     self.force_offset += self.path_planner.current_joint_state.effort[5] / (
+            #         self.L1 + self.L2)
+            #     self.calibration_counter += 1
 
-            self.force_offset = self.force_offset/calibration_cycles
-            self.get_logger().info(
-                f"force offset complete: {self.force_offset}")
+            # self.force_offset = self.force_offset/calibration_cycles
+            # self.get_logger().info(
+            #     f"force offset complete: {self.force_offset}")
             self.state = State.WAITING
 
         elif self.state == State.PLAN_MOVEGROUP:
@@ -473,10 +473,10 @@ class Drawing(Node):
                 self.state == State.PLAN_CARTESIAN_MOVE
                 return
 
-            self.get_logger().info(
-                f"self.moveit_mp_queue[0]: {self.moveit_mp_queue[0]}")
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
-            self.get_logger().info("here")
+
+            self.joint_trajectories.poses = self.moveit_mp_queue[0]
+
             self.path_planner.plan_path()
 
             self.state = State.WAITING
@@ -495,6 +495,10 @@ class Drawing(Node):
 
             await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue[0])
 
+            self.joint_trajectories.poses = self.cartesian_mp_queue[0]
+
+            self.cartesian_mp_queue.pop(0)
+
             self.state = State.EXECUTING
 
             self.get_logger().info("yes")
@@ -505,15 +509,10 @@ class Drawing(Node):
             # planner or the cartesian path planner, to our node for executing trajectories.
 
             self.joint_trajectories = ExecuteJointTrajectories.Request()
-
             self.joint_trajectories.state = "publish"
-            self.joint_trajectories.poses = self.cartesian_mp_queue[0]
-
-            self.cartesian_mp_queue.pop(0)
-
             self.joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
-            self.execute_future = self.self.joint_trajectories_client.call_async(
+            self.execute_future = self.joint_trajectories_client.call_async(
                 self.joint_trajectories)
             self.execute_future.add_done_callback(self.execute_done_callback)
 
