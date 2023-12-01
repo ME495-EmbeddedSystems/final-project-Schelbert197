@@ -190,7 +190,7 @@ class Tags(Node):
     async def where_to_write_callback(self, request, response):
         self.get_logger().info("where_to_write1")
         response_a = []
-        pos = Pose()
+        
         self.get_logger().info("where_to_write2")
         # ansT, ansR = self.get_transform('panda_link0', 'board')
         # ansT = self.robot_board.transform.translation
@@ -220,7 +220,7 @@ class Tags(Node):
         self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
             Tra)
 
-        response.inital_pose = pos
+        response.initial_pose = pos
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
@@ -239,7 +239,7 @@ class Tags(Node):
                            )
             Tra = Trl @ Tla
             position, rotation = self.matrix_to_position_quaternion(Tra, 1)
-
+            pos = Pose()
             pos.position = position
             pos.orientation = rotation
             self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
