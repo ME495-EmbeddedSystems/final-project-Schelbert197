@@ -27,10 +27,11 @@ class ImageModification(Node):
         self.modified_image_1_publish = self.create_publisher(Image, "modified_image_1", 10)
         self.modified_image_2_publish = self.create_publisher(Image, "modified_image_2", 10)
 
-        # create trackbars to tune edge detection
+        # create trackbars to tune edge detection and binarization thresh
         cv2.namedWindow('Parameters')
         cv2.createTrackbar('Canny_T_min', 'Parameters', 0, 255, nothing)
         cv2.createTrackbar('Canny_T_max', 'Parameters', 0, 255, nothing)
+        cv2.createTrackbar('Bin_Thresh', 'Parameters', 0, 255, nothing)
         cv2.setTrackbarPos('Canny_T_max', 'Parameters', 255)
 
 
@@ -76,8 +77,9 @@ class ImageModification(Node):
         try:
             warped = four_point_transform(gray, displayCnt.reshape(4, 2))
             # output = four_point_transform(resized_image, displayCnt.reshape(4, 2))
-
-            ret3,binarised = cv2.threshold(warped,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+            bin_thresh = cv2.getTrackbarPos('Bin_Thresh', 'Parameters')
+            ret3, binarised = cv2.threshold(warped, bin_thresh, 255, cv2.THRESH_BINARY_INV)
+            # ret3,binarised = cv2.threshold(warped,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
             # cv2.imshow("binarised", binarised)
             kernel = np.ones((7,7),np.uint8)
             dilation = cv2.dilate(binarised,kernel,iterations = 1)
