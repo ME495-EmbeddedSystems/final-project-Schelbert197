@@ -17,7 +17,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories
+from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories, Replan
 from brain_interfaces.msg import EEForce
 
 import numpy as np
@@ -121,7 +121,7 @@ class Drawing(Node):
             Cartesian, '/cartesian_mp', self.cartesian_mp_callback, callback_group=self.cartesian_mp_callback_group)
 
         self.replan_service = self.create_service(
-            Cartesian, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
+            Replan, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
@@ -513,8 +513,8 @@ class Drawing(Node):
             self.joint_trajectories.state = "publish"
             self.joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
-            self.get_logger().info(
-                f"what is happenign: {self.joint_trajectories}")
+            # self.get_logger().info(
+            #     f"what is happenign: {self.joint_trajectories}")
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 self.joint_trajectories)
