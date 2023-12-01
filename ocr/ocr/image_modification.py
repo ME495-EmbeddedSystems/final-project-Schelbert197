@@ -27,6 +27,7 @@ class ImageModification(Node):
         self.modified_image_1_publish = self.create_publisher(Image, "modified_image_1", 10)
         self.modified_image_2_publish = self.create_publisher(Image, "modified_image_2", 10)
 
+        # create trackbars to tune edge detection
         cv2.namedWindow('Parameters')
         cv2.createTrackbar('Canny_T_min', 'Parameters', 0, 255, nothing)
         cv2.createTrackbar('Canny_T_max', 'Parameters', 0, 255, nothing)
@@ -43,8 +44,8 @@ class ImageModification(Node):
         cv2.imshow("gray", gray)
         blurred = cv2.GaussianBlur(gray, (11, 11), 0)
         cv2.imshow("blurred", blurred)
-        ret3,binarised = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-        cv2.imshow("binarised", binarised)
+        # ret3,binarised = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+        # cv2.imshow("binarised", binarised)
         c_min = cv2.getTrackbarPos('Canny_T_min', 'Parameters')
         c_max = cv2.getTrackbarPos('Canny_T_max', 'Parameters')
         edged = cv2.Canny(blurred, c_min, c_max)
@@ -54,7 +55,7 @@ class ImageModification(Node):
 
         # find contours in the edge map, then sort them by their
         # size in descending order
-        cnts = cv2.findContours(edged.copy(), cv2.RETR_TREE,
+        cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL,
             cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
@@ -64,7 +65,7 @@ class ImageModification(Node):
         for c in cnts:
             # approximate the contour
             peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+            approx = cv2.approxPolyDP(c, 0.01 * peri, True)
             # if the contour has four vertices, then we have found
             # the whiteboard
             if len(approx) == 4:
@@ -74,8 +75,14 @@ class ImageModification(Node):
         # to it
         try:
             warped = four_point_transform(gray, displayCnt.reshape(4, 2))
-            output = four_point_transform(resized_image, displayCnt.reshape(4, 2))
-            cv2.imshow("transformed", warped)
+            # output = four_point_transform(resized_image, displayCnt.reshape(4, 2))
+
+            ret3,binarised = cv2.threshold(warped,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+            # cv2.imshow("binarised", binarised)
+            kernel = np.ones((13,13),np.uint8)
+            dilation = cv2.dilate(binarised,kernel,iterations = 1)
+            inverted_image = cv2.bitwise_not(dilation)
+            cv2.imshow("transformed", inverted_image)
         except:
             pass
 
@@ -92,7 +99,7 @@ class ImageModification(Node):
         # self.modified_image_1_publish.publish(img_publish_1)
         # self.modified_image_2_publish.publish(img_publish_2)
 
-        cv2.waitKey(1)
+        cv2.waitKey(30)
 
 
 def main(args=None):
