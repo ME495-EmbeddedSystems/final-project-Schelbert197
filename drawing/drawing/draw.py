@@ -286,6 +286,9 @@ class Drawing(Node):
         await self.plan_future
         self.get_logger().info(
             'after future ####################################################################')
+        
+        self.plan_future = Future()
+        self.execute_future = Future()
 
         return response
 
@@ -311,12 +314,17 @@ class Drawing(Node):
         # self.letter_start_point.z = request.start_point.z
         self.plan_future = Future()
         self.execute_future = Future()
+        
+        self.get_logger().info(f"self.plan_future: {self.plan_future}")
 
         self.cartesian_mp_queue += request.poses
         self.state = State.PLAN_CARTESIAN_MOVE
         self.use_force_control = True
 
         await self.plan_future
+        
+        self.plan_future = None
+        self.execute_future = None
 
         return response
 
@@ -405,6 +413,9 @@ class Drawing(Node):
             # the times are two far apart to extrapolate
             self.get_logger().info(f"Extrapolation exception: {e}")
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
+        
+    def execute_done_callback(self, future):
+        self.plan_future.set_result("done")
 
     async def timer_callback(self):
         """
@@ -483,6 +494,8 @@ class Drawing(Node):
 
             self.cartesian_mp_queue.clear()
             self.state = State.EXECUTING
+            
+            self.get_logger().info("yes")
 
         elif self.state == State.EXECUTING:
 
@@ -497,8 +510,9 @@ class Drawing(Node):
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 joint_trajectories)
+            self.execute_future.add_done_callback(self.execute_done_callback)
             # self.execute_future = Future()
-            await self.execute_future
+            # await self.execute_future
             # self.joint_traj_pub.publish(joint_trajectories)
 
             self.state = State.WAITING
@@ -514,6 +528,9 @@ class Drawing(Node):
 
             self.ee_force = self.calc_ee_force(
                 self.path_planner.current_joint_state.effort[5] - joint_torque_offset)
+            
+            # self.get_logger().info(f"ee_force: {self.ee_force}")
+            # self.get_logger().info(f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
 
             ee_force_msg = EEForce()
             ee_force_msg.ee_force = self.ee_force[2]
@@ -521,12 +538,11 @@ class Drawing(Node):
 
             self.force_pub.publish(ee_force_msg)
             
-            self.get_logger().info(f"future result: {self.execute_future.result()}")
+            # self.get_logger().info(f"future result: {self.execute_future.result()}")
 
-            if self.execute_future.result() is not None:
-                if self.execute_future.result().result == "done":
-                    self.plan_future.set_result("done")
-                    self.get_logger().info("done does not work")
+            if self.execute_future.done():
+                self.plan_future.set_result("done")
+                self.get_logger().info("done does not work")
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 

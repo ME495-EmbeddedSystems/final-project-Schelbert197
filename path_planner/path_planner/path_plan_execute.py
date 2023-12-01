@@ -280,16 +280,16 @@ class Path_Plan_Execute():
         self.goal_joint_state = result.solution.joint_state
 
     async def plan_cartesian_path(self, queue):
-        orientation_constraint = OrientationConstraint()
-        orientation_constraint.header = Header(
-            stamp=self.node.get_clock().now().to_msg())
-        orientation_constraint.orientation = Quaternion(
-            x=1.0, y=0.0, z=0.0, w=0.0)
-        orientation_constraint.link_name = 'panda_hand_tcp'
-        orientation_constraint.absolute_x_axis_tolerance = 0.1
-        orientation_constraint.absolute_y_axis_tolerance = 0.1
-        orientation_constraint.absolute_z_axis_tolerance = 0.1
-        orientation_constraint.weight = 1.0
+        # orientation_constraint = OrientationConstraint()
+        # orientation_constraint.header = Header(
+        #     stamp=self.node.get_clock().now().to_msg())
+        # orientation_constraint.orientation = Quaternion(
+        #     x=1.0, y=0.0, z=0.0, w=0.0)
+        # orientation_constraint.link_name = 'panda_hand_tcp'
+        # orientation_constraint.absolute_x_axis_tolerance = 0.1
+        # orientation_constraint.absolute_y_axis_tolerance = 0.1
+        # orientation_constraint.absolute_z_axis_tolerance = 0.1
+        # orientation_constraint.weight = 1.0
 
         self.cartesian_path_request = GetCartesianPath.Request()
 
@@ -311,7 +311,7 @@ class Path_Plan_Execute():
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
         # setting this to 0.1 for now, could cause problems later
-        self.cartesian_path_request.max_step = 0.1
+        self.cartesian_path_request.max_step = 0.05
         # self.cartesian_path_request.jump_threshold = 0
         # self.cartesian_path_request.prismatic_jump_threshold = 0
         # self.cartesian_path_request.revolute_jump_threshold = 0
@@ -415,10 +415,10 @@ class Path_Plan_Execute():
             f"movegroup_result: {self.movegroup_status}")
 
         self.planned_trajectory = self.movegroup_result.planned_trajectory
-        self.node.get_logger().info(
-            f"currentjointstate: {self.current_joint_state}")
-        self.node.get_logger().info(
-            f"plannedtrajectory: {self.planned_trajectory}")
+        # self.node.get_logger().info(
+        #     f"currentjointstate: {self.current_joint_state}")
+        # self.node.get_logger().info(
+        #     f"plannedtrajectory: {self.planned_trajectory}")
 
         self.node.get_logger().info("Trajectory Planned!")
 
