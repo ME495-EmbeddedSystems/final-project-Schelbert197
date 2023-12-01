@@ -191,7 +191,7 @@ class Tags(Node):
     async def where_to_write_callback(self, request, response):
         self.get_logger().info("where_to_write1")
         response_a = []
-        
+
         self.get_logger().info("where_to_write2")
         # ansT, ansR = self.get_transform('panda_link0', 'board')
         # ansT = self.robot_board.transform.translation
@@ -207,7 +207,7 @@ class Tags(Node):
         Trl = Trb @ Tbl
 
         x, y = request.x[0], request.y[0]
-        z = 0.15
+        z = 0.17
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],
@@ -227,7 +227,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.090 if request.onboard[i] else 0.090
+            z = 0.04 if request.onboard[i] else 0.017
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],

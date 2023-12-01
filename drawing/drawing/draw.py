@@ -475,7 +475,7 @@ class Drawing(Node):
 
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
 
-            self.joint_trajectories.poses = self.moveit_mp_queue[0]
+            self.joint_trajectories.poses = self.moveit_mp_queue
 
             self.path_planner.plan_path()
 
@@ -494,23 +494,27 @@ class Drawing(Node):
                 self.state == State.WAITING
 
             await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue[0])
-
+            self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.poses = self.cartesian_mp_queue[0]
+
+            self.get_logger().info(
+                f"cartesian queue: {self.cartesian_mp_queue}")
 
             self.cartesian_mp_queue.pop(0)
 
             self.state = State.EXECUTING
-
-            self.get_logger().info("yes")
 
         elif self.state == State.EXECUTING:
 
             # send the trajectory previously planned, either by the moveit motion
             # planner or the cartesian path planner, to our node for executing trajectories.
 
-            self.joint_trajectories = ExecuteJointTrajectories.Request()
+            # self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.state = "publish"
             self.joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
+
+            self.get_logger().info(
+                f"what is happenign: {self.joint_trajectories}")
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 self.joint_trajectories)
