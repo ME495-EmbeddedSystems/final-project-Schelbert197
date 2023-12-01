@@ -85,7 +85,7 @@ class Kickstart(Node):
 
         # denote pose_list and initial_pose from BoardTiles response
         resp = await self.tile_client.call_async(request)
-        pose1 = resp.inital_pose
+        pose1 = resp.initial_pose
         pose_list = resp.pose_list
 
         self.get_logger().info(f"Pose List for Dash: {pose1}")

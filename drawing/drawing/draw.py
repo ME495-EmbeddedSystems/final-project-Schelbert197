@@ -2,20 +2,16 @@ import rclpy
 from rclpy.node import Node
 from rclpy.task import Future
 
-from std_srvs.srv import Empty
 from geometry_msgs.msg import Point, Quaternion, Pose
-from sensor_msgs.msg import JointState
 
 from path_planner.path_plan_execute import Path_Plan_Execute
-from character_interfaces.alphabet import alphabet
-from joint_interfaces.msg import JointTrajectories
 
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
 
-from action_msgs.msg import GoalStatus
+from std_msgs.msg import String
 
-from std_msgs.msg import String, Float32
+from action_msgs.msg import GoalStatus
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -97,6 +93,7 @@ class Drawing(Node):
         self.timer_callback_group = MutuallyExclusiveCallbackGroup()
         self.moveit_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.replan_service_callback_group = MutuallyExclusiveCallbackGroup()
         self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_joint_trajectories_callback_group = MutuallyExclusiveCallbackGroup()
@@ -122,6 +119,9 @@ class Drawing(Node):
         # start position of the letter to be planned.
         self.cartesian_mp_service = self.create_service(
             Cartesian, '/cartesian_mp', self.cartesian_mp_callback, callback_group=self.cartesian_mp_callback_group)
+
+        self.replan_service = self.create_service(
+            Cartesian, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
@@ -160,9 +160,6 @@ class Drawing(Node):
 
         self.state = State.CALIBRATE
 
-        self.L1 = 0.1070  # length of panda_link7
-        self.L2 = 0.1130  # distancefrom panda_joint7 to gripper tips
-
         self.gripper_mass = 1.795750991  # kg
         self.g = 9.81  # m/s**2
 
@@ -179,8 +176,7 @@ class Drawing(Node):
         self.ee_force = 0.0  # N
         self.use_force_control = False
 
-        self.current_pos = Point(x=0.0, y=0.0, z=0.0)
-        self.letter_start_pos = Point(x=0.0, y=0.0, z=0.0)
+        self.joint_trajectories = ExecuteJointTrajectories.Request()
 
         self.home_position = Pose(
             position=Point(x=-0.5, y=0.0, z=0.4),
@@ -286,7 +282,7 @@ class Drawing(Node):
         await self.plan_future
         self.get_logger().info(
             'after future ####################################################################')
-        
+
         self.plan_future = Future()
         self.execute_future = Future()
 
@@ -314,17 +310,26 @@ class Drawing(Node):
         # self.letter_start_point.z = request.start_point.z
         self.plan_future = Future()
         self.execute_future = Future()
-        
+
         self.get_logger().info(f"self.plan_future: {self.plan_future}")
 
-        self.cartesian_mp_queue += request.poses
+        self.cartesian_mp_queue.append(request.poses)
         self.state = State.PLAN_CARTESIAN_MOVE
         self.use_force_control = True
 
         await self.plan_future
-        
+
         self.plan_future = None
         self.execute_future = None
+
+        return response
+
+    async def replan_callback(self, request, response):
+        self.get_logger().info(f"REPLAN REQUEST RECEIVED")
+
+        await self.path_planner.plan_cartesian_path(request.poses)
+
+        response.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
         return response
 
@@ -413,7 +418,7 @@ class Drawing(Node):
             # the times are two far apart to extrapolate
             self.get_logger().info(f"Extrapolation exception: {e}")
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
-        
+
     def execute_done_callback(self, future):
         self.plan_future.set_result("done")
 
@@ -437,24 +442,24 @@ class Drawing(Node):
             # here we figure out what the force offset should be by using an average.
             # we take 100 readings of the effort in panda_joint6, and take the average
             # to assign the force offset in the joint due to gravity.
-            self.get_logger().info(
-                f"self.use_fake_hardware: {self.use_fake_hardware}")
-            if self.use_fake_hardware:
-                self.state = State.WAITING
-                return
+            # self.get_logger().info(
+            #     f"self.use_fake_hardware: {self.use_fake_hardware}")
+            # if self.use_fake_hardware:
+            #     self.state = State.WAITING
+            #     return
 
             while not self.path_planner.current_joint_state.effort:
                 return
 
-            calibration_cycles = 100
-            while self.calibration_counter < calibration_cycles:
-                self.force_offset += self.path_planner.current_joint_state.effort[5] / (
-                    self.L1 + self.L2)
-                self.calibration_counter += 1
+            # calibration_cycles = 100
+            # while self.calibration_counter < calibration_cycles:
+            #     self.force_offset += self.path_planner.current_joint_state.effort[5] / (
+            #         self.L1 + self.L2)
+            #     self.calibration_counter += 1
 
-            self.force_offset = self.force_offset/calibration_cycles
-            self.get_logger().info(
-                f"force offset complete: {self.force_offset}")
+            # self.force_offset = self.force_offset/calibration_cycles
+            # self.get_logger().info(
+            #     f"force offset complete: {self.force_offset}")
             self.state = State.WAITING
 
         elif self.state == State.PLAN_MOVEGROUP:
@@ -468,10 +473,10 @@ class Drawing(Node):
                 self.state == State.PLAN_CARTESIAN_MOVE
                 return
 
-            self.get_logger().info(
-                f"self.moveit_mp_queue[0]: {self.moveit_mp_queue[0]}")
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
-            self.get_logger().info("here")
+
+            self.joint_trajectories.poses = self.moveit_mp_queue[0]
+
             self.path_planner.plan_path()
 
             self.state = State.WAITING
@@ -488,13 +493,14 @@ class Drawing(Node):
             if not self.cartesian_mp_queue:
                 self.state == State.WAITING
 
-            self.get_logger().info(f"queue: {self.cartesian_mp_queue}")
+            await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue[0])
 
-            await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue)
+            self.joint_trajectories.poses = self.cartesian_mp_queue[0]
 
-            self.cartesian_mp_queue.clear()
+            self.cartesian_mp_queue.pop(0)
+
             self.state = State.EXECUTING
-            
+
             self.get_logger().info("yes")
 
         elif self.state == State.EXECUTING:
@@ -502,18 +508,13 @@ class Drawing(Node):
             # send the trajectory previously planned, either by the moveit motion
             # planner or the cartesian path planner, to our node for executing trajectories.
 
-            joint_trajectories = ExecuteJointTrajectories.Request()
-            joint_trajectories.clear = False
-            joint_trajectories.state = "publish"
-
-            joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
+            self.joint_trajectories = ExecuteJointTrajectories.Request()
+            self.joint_trajectories.state = "publish"
+            self.joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
 
             self.execute_future = self.joint_trajectories_client.call_async(
-                joint_trajectories)
+                self.joint_trajectories)
             self.execute_future.add_done_callback(self.execute_done_callback)
-            # self.execute_future = Future()
-            # await self.execute_future
-            # self.joint_traj_pub.publish(joint_trajectories)
 
             self.state = State.WAITING
 
@@ -528,7 +529,7 @@ class Drawing(Node):
 
             self.ee_force = self.calc_ee_force(
                 self.path_planner.current_joint_state.effort[5] - joint_torque_offset)
-            
+
             # self.get_logger().info(f"ee_force: {self.ee_force}")
             # self.get_logger().info(f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
 
@@ -537,12 +538,11 @@ class Drawing(Node):
             ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
-            
+
             # self.get_logger().info(f"future result: {self.execute_future.result()}")
 
             if self.execute_future.done():
                 self.plan_future.set_result("done")
-                self.get_logger().info("done does not work")
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
