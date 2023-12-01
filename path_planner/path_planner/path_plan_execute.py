@@ -311,12 +311,12 @@ class Path_Plan_Execute():
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
         # setting this to 0.1 for now, could cause problems later
-        self.cartesian_path_request.max_step = 0.05
+        self.cartesian_path_request.max_step = 0.005
         # self.cartesian_path_request.jump_threshold = 0
         # self.cartesian_path_request.prismatic_jump_threshold = 0
         # self.cartesian_path_request.revolute_jump_threshold = 0
         self.cartesian_path_request.avoid_collisions = True
-        self.cartesian_path_request.max_velocity_scaling_factor = 0.1
+        self.cartesian_path_request.max_velocity_scaling_factor = 0.025
         self.cartesian_path_request.max_acceleration_scaling_factor = 0.1
         # self.cartesian_path_request.path_constraints.orientation_constraint = []
         # self.node.get_logger().info(f"request: {self.cartesian_path_request}")

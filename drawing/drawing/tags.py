@@ -305,6 +305,8 @@ class Tags(Node):
         return response
 
     def update_trajectory_callback(self, request, response):
+        ansT, ansR = self.get_transform("board", "panda_hand_tcp")
+        z = ansT[2]
         self.get_logger().info("reached update trajcetory callback")
         pose_list = []
         for pose in request.input_poses:
@@ -316,9 +318,11 @@ class Tags(Node):
             Tba = mr.TransInv(Trb)@Tra
             update = np.array([[1, 0, 0, 0],
                                [0, 1, 0, 0],
-                               [0, 0, 1, 0.005],
+                               [0, 0, 1, z],
                                [0, 0, 0, 1]])
-            new_Tba = update@Tba
+            # new_Tba = update@Tba
+            new_Tba = Tba
+            new_Tba[2, 3] = z - 0.002
             new_Tra = Trb @ new_Tba
             pos = Pose()
             position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)

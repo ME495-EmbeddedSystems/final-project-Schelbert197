@@ -534,8 +534,11 @@ class Drawing(Node):
             self.ee_force = self.calc_ee_force(
                 self.path_planner.current_joint_state.effort[5] - joint_torque_offset)
 
-            # self.get_logger().info(f"ee_force: {self.ee_force}")
-            # self.get_logger().info(f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
+            self.get_logger().info(f"ee_force: {self.ee_force}")
+            self.get_logger().info(
+                f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
+            self.get_logger().info(
+                f"joint torque offset: {joint_torque_offset}")
 
             ee_force_msg = EEForce()
             ee_force_msg.ee_force = self.ee_force[2]

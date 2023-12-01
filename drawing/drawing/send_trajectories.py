@@ -92,9 +92,19 @@ class Executor(Node):
         self.poses = request.poses
         self.get_logger().info(f"initial poses: {self.poses}")
 
+        if len(self.poses) > 1:
+            self.ee_force_threshold = 2.0
+
+        if not self.use_force_control:
+            self.replan = False
+
         if self.replan:
             update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses))
             self.poses = update_trajectory_response.output_poses
+
+            replan_response = await self.replan_client.call_async(Replan.Request(poses=self.poses))
+
+            self.joint_trajectories = replan_response.joint_trajectories
 
         if request.state == "publish":
             self.state = State.PUBLISH
@@ -117,7 +127,7 @@ class Executor(Node):
 
             self.joint_trajectories.clear()
             self.replan = True
-            self.ee_force_threshold = self.ee_force + 0.5
+            self.ee_force_threshold = self.ee_force + 3
             self.get_logger().info("joint trajectories cleared")
 
         # if list of waypoints is not empty, publish to the topic that executes
