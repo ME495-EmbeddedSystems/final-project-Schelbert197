@@ -32,7 +32,7 @@ class Paddle_Ocr(Node):
         #declare and define parameters
         self.declare_parameter('ocr_frequency', 0.5)
         self.param_ocr_frequency = self.get_parameter('ocr_frequency').get_parameter_value().double_value
-        self.declare_parameter('ocr_threshold', 0.50)
+        self.declare_parameter('ocr_threshold', 0.30)
         self.param_ocr_threshold = self.get_parameter('ocr_threshold').get_parameter_value().double_value
 
         # create timer for calling the ocr function
@@ -64,7 +64,7 @@ class Paddle_Ocr(Node):
         result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         if result[0] != None:
             self.guess_verification_letter(result)
-        # print(result)
+        print(result)
 
     def ocr_func_word(self, frame):
         """Run OCR on the image frame"""
@@ -82,6 +82,11 @@ class Paddle_Ocr(Node):
                 if result[0][0][1] > self.param_ocr_threshold: # check confidence
                     self.guess_tracking_letter(result)
                     print(result[0][0][0])
+            # catch exception for "O"
+            elif result[0][0][0] == '0': 
+                print('O')
+                if result[0][0][1] > self.param_ocr_threshold: # check confidence
+                    self.guess_tracking_letter([[('O', result[0][0][1])]])
         except:
             pass
 
