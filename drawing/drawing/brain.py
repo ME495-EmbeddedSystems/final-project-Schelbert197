@@ -195,7 +195,7 @@ class Brain(Node):
     def timer_callback(self):
         if self.state == State.INITIALIZE:
             # Initializes the kickstart feature then waits for completion
-            self.kick_future = self.kickstart_service_client.call(Empty)
+            self.kick_future = self.kickstart_service_client.call_async(Empty)
             self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:
