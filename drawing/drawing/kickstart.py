@@ -29,7 +29,7 @@ class Kickstart(Node):
         # create kickstart service
         self.kickstart_service = self.create_service(
             Empty, 'kickstart_service', self.kickstart_callback)
-        
+
         # timer variables
         # self.frequency = 100.0
         # self.timer_period = 1 / self.frequency
@@ -78,7 +78,7 @@ class Kickstart(Node):
         # 1st wrong dash info
         request = BoardTiles.Request()
         request.mode = 0
-        request.position = 0
+        request.position = 1
         request.x = dash_x
         request.y = dash_y
         request.onboard = dash_on
@@ -90,26 +90,29 @@ class Kickstart(Node):
 
         self.get_logger().info(f"Pose List for Dash: {pose1}")
         self.get_logger().info(f"Pose List for Dash: {pose_list}")
-    
+
         # FIRST TIME MOVING TO BOARD - MOVEIT_MP
         # move robot to first pose in front of dash origin - moveit_mp
         # request2 = MovePose.Request()
-        
-        
-        
+
         request2 = Cartesian.Request()
         request2.poses = [pose1]
+        request2.velocity = 0.1
+        request2.replan = False
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"one done")
-        
-        
+
         request2 = Cartesian.Request()
         request2.poses = [pose_list[0]]
+        request2.velocity = 0.015
+        request2.replan = False
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"second done")
         # draw remaining pose dashes with Cartesian mp
         request3 = Cartesian.Request()
         request3.poses = pose_list
+        request3.velocity = 0.015
+        request3.replan = True
         self.get_logger().info(f"pose_list: {pose_list}")
         await self.cartesian_client.call_async(request3)
         self.get_logger().info(f"all done")
@@ -196,8 +199,6 @@ class Kickstart(Node):
     #         request.onboard = [True, True, True, False]
 
     #         pose_list = await self.tile_client.call_async(request)
-
-    
 
     #         request = Cartesian.Request()
     #         request.poses = pose_list.origin_pose

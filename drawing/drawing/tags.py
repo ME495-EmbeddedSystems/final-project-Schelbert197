@@ -18,7 +18,7 @@ from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose
+from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -91,6 +91,8 @@ class Tags(Node):
             Empty, 'calibrate', self.calibrate_callback, callback_group=self.calibrate_callback_grp)
         self.where_to_write = self.create_service(
             BoardTiles, 'where_to_write', self.where_to_write_callback)
+        self.update_trajectory = self.create_service(
+            UpdateTrajectory, 'update_trajectory', self.update_trajectory_callback)
 
         # create publishers
         self.state_publisher = self.create_publisher(String, 'cal_state', 10)
@@ -187,73 +189,6 @@ class Tags(Node):
 
         return transform_matrix
 
-    async def where_to_write_callback(self, request, response):
-        self.get_logger().info("where_to_write1")
-        response_a = []
-        
-        self.get_logger().info("where_to_write2")
-        # ansT, ansR = self.get_transform('panda_link0', 'board')
-        # ansT = self.robot_board.transform.translation
-        # ansR = self.robot_board.transform.rotation
-        # self.get_logger().info(f'board : {ansT, ansR}')
-        # Trb = self.array_to_transform_matrix(ansT, ansR)
-        Trb = self.boardT
-        lx, ly = self.grid.grid_to_world(request.mode, request.position)
-        Tbl = np.array([[1, 0, 0, lx],
-                        [0, 1, 0, ly],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-        Trl = Trb @ Tbl
-
-        x, y = request.x[0], request.y[0]
-        z = 0.15
-
-        Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
-                        [0.06784999,  0.05540183, -0.99615612,  y],
-                        [-0.9969137, -0.03575537, -0.06989015,  z],
-                        [0.,        0.,        0.,         1.]]
-                       )
-        pos = Pose()
-        Tra = Trl @ Tla
-        position, rotation = self.matrix_to_position_quaternion(Tra, 1)
-        pos.position = position
-        pos.orientation = rotation
-        self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
-            Tra)
-
-        response.initial_pose = pos
-
-        for i in range(len(request.x)):
-            x, y = request.x[i], request.y[i]
-            self.get_logger().info(f'x,y : {x,y}')
-            z = 0.090 if request.onboard[i] else 0.090
-
-            # Tla = np.array([[0, 1, 0, x],
-            #                 [0.5,  0.0 ,        -0.8660254, y],
-            #                 [-0.8660254,  0.0  , -0.5, z],
-            #                 [0, 0, 0, 1]])
-
-            Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
-                            [0.06784999,  0.05540183, -0.99615612,  y],
-                            [-0.9969137, -0.03575537, -0.06989015,  z],
-                            [0.,        0.,        0.,         1.]]
-                           )
-            Tra = Trl @ Tla
-            position, rotation = self.matrix_to_position_quaternion(Tra, 1)
-            pos = Pose()
-            pos.position = position
-            pos.orientation = rotation
-            self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
-                Tra)
-            self.get_logger().info(f'pose is: {pos}')
-            response_a.append(pos)
-            self.get_logger().info(f'Now the list is: {response_a}')
-
-        self.get_logger().info("where_to_write3")
-        response.pose_list = response_a
-        # self.get_logger().info(f'{response.pose_list}')
-        return response
-
     async def calibrate_callback(self, request, response):
         self.state = State.CALIBRATE
         # ([], [])
@@ -300,6 +235,112 @@ class Tags(Node):
         self.get_logger().info(f'Trb: {pos,rotation}')
 
         self.get_logger().info("calibrate")
+        return response
+
+    async def where_to_write_callback(self, request, response):
+        self.get_logger().info("where_to_write1")
+        response_a = []
+
+        self.get_logger().info("where_to_write2")
+        # ansT, ansR = self.get_transform('panda_link0', 'board')
+        # ansT = self.robot_board.transform.translation
+        # ansR = self.robot_board.transform.rotation
+        # self.get_logger().info(f'board : {ansT, ansR}')
+        # Trb = self.array_to_transform_matrix(ansT, ansR)
+        Trb = self.boardT
+        lx, ly = self.grid.grid_to_world(request.mode, request.position)
+        Tbl = np.array([[1, 0, 0, lx],
+                        [0, 1, 0, ly],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+        Trl = Trb @ Tbl
+
+        x, y = request.x[0], request.y[0]
+        z = 0.17
+
+        Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
+                        [0.06784999,  0.05540183, -0.99615612,  y],
+                        [-0.9969137, -0.03575537, -0.06989015,  z],
+                        [0.,        0.,        0.,         1.]]
+                       )
+        pos = Pose()
+        Tra = Trl @ Tla
+        position, rotation = self.matrix_to_position_quaternion(Tra, 1)
+        pos.position = position
+        pos.orientation = rotation
+        self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
+            Tra)
+
+        response.initial_pose = pos
+
+        for i in range(len(request.x)):
+            x, y = request.x[i], request.y[i]
+            self.get_logger().info(f'x,y : {x,y}')
+            z = 0.04 if request.onboard[i] else 0.017
+
+            # Tla = np.array([[0, 1, 0, x],
+            #                 [0.5,  0.0 ,        -0.8660254, y],
+            #                 [-0.8660254,  0.0  , -0.5, z],
+            #                 [0, 0, 0, 1]])
+
+            Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
+                            [0.06784999,  0.05540183, -0.99615612,  y],
+                            [-0.9969137, -0.03575537, -0.06989015,  z],
+                            [0.,        0.,        0.,         1.]]
+                           )
+            Tra = Trl @ Tla
+            position, rotation = self.matrix_to_position_quaternion(Tra, 1)
+            pos = Pose()
+            pos.position = position
+            pos.orientation = rotation
+            self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
+                Tra)
+            self.get_logger().info(f'pose is: {pos}')
+            response_a.append(pos)
+            self.get_logger().info(f'Now the list is: {response_a}')
+
+        self.get_logger().info("where_to_write3")
+        response.pose_list = response_a
+        # self.get_logger().info(f'{response.pose_list}')
+        return response
+
+    def update_trajectory_callback(self, request, response):
+
+        ansT, ansR = self.get_transform("board", "panda_hand_tcp")
+
+        # positive z is out of the board
+        if request.into_board:
+            z = ansT[2] - 0.0005
+        else:
+            z = ansT[2] + 0.0005
+        self.get_logger().info("reached update trajcetory callback")
+
+        pose = request.input_pose
+
+        # change the pose
+        Trans_arr = [pose.position.x, pose.position.y, pose.position.z]
+        Rot_arr = [pose.orientation.x, pose.orientation.y,
+                   pose.orientation.z, pose.orientation.w]
+        Tra = self.array_to_transform_matrix(Trans_arr, Rot_arr)
+        Trb = self.boardT
+        Tba = mr.TransInv(Trb)@Tra
+        # update = np.array([[1, 0, 0, 0],
+        #                    [0, 1, 0, 0],
+        #                    [0, 0, 1, z],
+        #                    [0, 0, 0, 1]])
+        # new_Tba = update@Tba
+        new_Tba = Tba
+        new_Tba[2, 3] = z
+        new_Tra = Trb @ new_Tba
+        pos = Pose()
+        position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)
+        pos.position = position
+        pos.orientation = rotation
+
+        response.output_pose = pose
+
+        self.get_logger().info("exiting update trajectory callback")
+
         return response
 
     def record_callback(self, request, response):
