@@ -1,3 +1,4 @@
 geometry_msgs/Pose[] input_poses
+bool into_board
 ---
 geometry_msgs/Pose[] output_poses

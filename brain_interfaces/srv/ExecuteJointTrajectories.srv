@@ -1,5 +1,6 @@
 string state
 trajectory_msgs/JointTrajectory[] joint_trajectories
 geometry_msgs/Pose[] poses
-
+bool replan
+bool use_force_control
 ---

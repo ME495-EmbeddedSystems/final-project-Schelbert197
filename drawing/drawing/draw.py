@@ -176,6 +176,9 @@ class Drawing(Node):
         self.ee_force = 0.0  # N
         self.use_force_control = False
 
+        self.cartesian_velocity = []
+        self.replan = False
+
         self.joint_trajectories = ExecuteJointTrajectories.Request()
 
         self.home_position = Pose(
@@ -261,11 +264,8 @@ class Drawing(Node):
         # to the planning state, and from there if there's nothing in the queue the state
         # will change to waiting.
 
-        if msg.data == "done":
-            trans, rotation = self.get_transform(
-                'panda_link0', 'panda_hand_tcp')
-            self.letter_start_pos = Point(x=trans[0], y=trans[1], z=trans[2])
-            self.state = State.PLAN_MOVEGROUP
+        if msg.data == "ee_force_exceeded":
+            pass
 
     async def moveit_mp_callback(self, request, response):
 
@@ -311,25 +311,42 @@ class Drawing(Node):
         self.plan_future = Future()
         self.execute_future = Future()
 
-        self.get_logger().info(f"self.plan_future: {self.plan_future}")
+        self.replan = request.replan
+        for pose in request.poses:
+            self.cartesian_mp_queue.append(pose)
+            self.cartesian_velocity.append(request.velocity)
 
-        self.cartesian_mp_queue.append(request.poses)
         self.state = State.PLAN_CARTESIAN_MOVE
         self.use_force_control = True
 
         await self.plan_future
 
-        self.plan_future = None
-        self.execute_future = None
+        self.plan_future = Future()
+        self.execute_future = Future()  # different from the moveit callback?
 
         return response
 
     async def replan_callback(self, request, response):
         self.get_logger().info(f"REPLAN REQUEST RECEIVED")
 
-        await self.path_planner.plan_cartesian_path(request.poses)
+        self.get_logger().info(f"request.pose: {request.poses}")
+        self.get_logger().info(f"request.poses length: {len(request.poses)}")
+
+        self.cartesian_mp_queue.clear()
+        for pose in request.poses:
+            self.cartesian_mp_queue.append(pose)
+            self.cartesian_velocity.append(0.0025)
+
+        # insert a new velocity, because we inserted a new pose in the send_trajectory node
+        # self.cartesian_velocity.insert(0, 0.025)
+
+        await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
 
         response.joint_trajectories = self.path_planner.execute_individual_trajectories()
+        response.poses = self.cartesian_mp_queue
+
+        # self.cartesian_mp_queue.pop(0)
+        # self.cartesian_velocity.pop(0)
 
         return response
 
@@ -361,8 +378,6 @@ class Drawing(Node):
         self.path_planner.goal_joint_state.header.frame_id = 'panda_link0'
 
         # while joints_to_move:
-        self.get_logger().info(
-            f"goal_joint_tstae_names: {self.path_planner.goal_joint_state.name}")
         for i in range(len(self.path_planner.goal_joint_state.name)-2):
             # self.get_logger().info(f'{ self.path_planner.goal_joint_state.name[i]} 1')ointTrajectory(head
             # self.get_logger().info(f'{joints_to_move[0]} 2')
@@ -420,7 +435,15 @@ class Drawing(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     def execute_done_callback(self, future):
-        self.plan_future.set_result("done")
+
+        if not self.cartesian_mp_queue:
+            self.get_logger().info("plan has been executed")
+            self.plan_future.set_result("done")
+        else:
+            self.get_logger().info("cartesian move was executed")
+            self.state = State.PLAN_CARTESIAN_MOVE
+            self.execute_future = Future()
+        # self.plan_future.set_result("done")
 
     async def timer_callback(self):
         """
@@ -474,8 +497,9 @@ class Drawing(Node):
                 return
 
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
-
+            self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.poses = self.moveit_mp_queue
+            self.joint_trajectories.use_force_control = self.use_force_control
 
             self.path_planner.plan_path()
 
@@ -488,19 +512,24 @@ class Drawing(Node):
             # check to see if the cartesian move queue is empty, and if not
             # then plan a cartesian path using the poses in the queue. The
             # /compute_cartesian_path service takes in a list of poses, and
-            # creates a trajectory to visit all of those poses.
+            # creates a trajectory to visit all of those posesp
 
             if not self.cartesian_mp_queue:
                 self.state == State.WAITING
 
-            await self.path_planner.plan_cartesian_path(self.cartesian_mp_queue[0])
+            await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
             self.joint_trajectories = ExecuteJointTrajectories.Request()
-            self.joint_trajectories.poses = self.cartesian_mp_queue[0]
-
+            # queue the remaining poses, so that if force threshold is exceeded,
+            # send_trajectories can initiate a replan request directly with the
+            # april tags node... trust me.
+            self.joint_trajectories.poses = self.cartesian_mp_queue
+            self.joint_trajectories.replan = self.replan
+            self.joint_trajectories.use_force_control = self.use_force_control
             self.get_logger().info(
                 f"cartesian queue: {self.cartesian_mp_queue}")
 
             self.cartesian_mp_queue.pop(0)
+            self.cartesian_velocity.pop(0)
 
             self.state = State.EXECUTING
 
@@ -509,12 +538,8 @@ class Drawing(Node):
             # send the trajectory previously planned, either by the moveit motion
             # planner or the cartesian path planner, to our node for executing trajectories.
 
-            # self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.state = "publish"
             self.joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
-
-            # self.get_logger().info(
-            #     f"what is happenign: {self.joint_trajectories}")
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 self.joint_trajectories)
@@ -534,22 +559,28 @@ class Drawing(Node):
             self.ee_force = self.calc_ee_force(
                 self.path_planner.current_joint_state.effort[5] - joint_torque_offset)
 
-            self.get_logger().info(f"ee_force: {self.ee_force}")
-            self.get_logger().info(
-                f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
-            self.get_logger().info(
-                f"joint torque offset: {joint_torque_offset}")
+            # self.get_logger().info(f"ee_force: {self.ee_force}")
+            # self.get_logger().info(
+            #     f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
+            # self.get_logger().info(
+            #     f"joint torque offset: {joint_torque_offset}")
 
             ee_force_msg = EEForce()
             ee_force_msg.ee_force = self.ee_force[2]
-            ee_force_msg.use_force_control = self.use_force_control
+            # ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
 
-            # self.get_logger().info(f"future result: {self.execute_future.result()}")
-
-            if self.execute_future.done():
-                self.plan_future.set_result("done")
+            # if self.execute_future.done():
+            #     # self.get_logger().info(
+            #     #     f"cartesian_np_queue: {self.cartesian_mp_queue}")
+            #     if not self.cartesian_mp_queue:
+            #         self.get_logger().info("plan has been executed")
+            #         self.plan_future.set_result("done")
+            #     else:
+            #         self.get_logger().info("cartesian move was executed")
+            #         self.state = State.PLAN_CARTESIAN_MOVE
+            #         self.execute_future = Future()
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 

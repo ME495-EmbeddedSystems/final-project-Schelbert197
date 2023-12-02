@@ -97,16 +97,22 @@ class Kickstart(Node):
 
         request2 = Cartesian.Request()
         request2.poses = [pose1]
+        request2.velocity = 0.1
+        request2.replan = False
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"one done")
 
         request2 = Cartesian.Request()
         request2.poses = [pose_list[0]]
+        request2.velocity = 0.015
+        request2.replan = False
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"second done")
         # draw remaining pose dashes with Cartesian mp
         request3 = Cartesian.Request()
         request3.poses = pose_list
+        request3.velocity = 0.015
+        request3.replan = True
         self.get_logger().info(f"pose_list: {pose_list}")
         await self.cartesian_client.call_async(request3)
         self.get_logger().info(f"all done")

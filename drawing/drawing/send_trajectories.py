@@ -4,7 +4,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.task import Future
 
 from trajectory_msgs.msg import JointTrajectory
-from geometry_msgs.msg import Pose, Point
+from geometry_msgs.msg import Pose, Point, Quaternion
 from std_msgs.msg import String
 
 from brain_interfaces.msg import EEForce
@@ -15,6 +15,7 @@ from enum import Enum, auto
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
+import tf2_ros
 
 import numpy as np
 import transforms3d as tf
@@ -70,8 +71,10 @@ class Executor(Node):
         self.joint_trajectories = []
         self.poses = []
         self.ee_force = 0
-        self.ee_force_threshold = 3.6  # N
+        self.upper_threshold = 5.0  # N
+        self.lower_threshold = -2.0
         self.state = None
+        self.use_force_control = False
 
         self.distance = 0.01  # distance along quaternion to move
         self.replan = False
@@ -80,9 +83,49 @@ class Executor(Node):
 
         self.i = 0
 
+    def get_transform(self, parent_frame, child_frame):
+        """
+        Try catch block for listening to transforms between parent and child frame.
+
+        Args:
+        ----
+        parent_frame (string): name of parent frame
+        child_frame (string): name of child frame
+
+        Returns
+        -------
+        brick_to_platform: the x,y,z of the translational transform
+
+        """
+        try:
+            pose = Pose()
+            trans = self.buffer.lookup_transform(
+                parent_frame, child_frame, rclpy.time.Time()
+            )
+            transl = trans.transform.translation
+            rot = trans.transform.rotation
+            pose.position = Point(x=transl.x, y=transl.y, z=transl.z)
+            pose.orientation = Quaternion(x=rot.x, y=rot.y, z=rot.z, w=rot.w)
+
+            # print(brick_to_platform[2])
+            return pose
+
+        except tf2_ros.LookupException as e:
+            # the frames don't exist yet
+            self.get_logger().info(f"Lookup exception: {e}")
+            return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
+        except tf2_ros.ConnectivityException as e:
+            # the tf tree has a disconnection
+            self.get_logger().info(f"Connectivity exception: {e}")
+            return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
+        except tf2_ros.ExtrapolationException as e:
+            # the times are two far apart to extrapolate
+            self.get_logger().info(f"Extrapolation exception: {e}")
+            return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
+
     def force_callback(self, msg):
         self.ee_force = msg.ee_force
-        self.use_force_control = msg.use_force_control
+        # self.use_force_control = msg.use_force_control
 
     async def joint_trajectories_callback(self, request, response):
         self.get_logger().info("message received!")
@@ -90,21 +133,17 @@ class Executor(Node):
 
         self.joint_trajectories = request.joint_trajectories
         self.poses = request.poses
-        self.get_logger().info(f"initial poses: {self.poses}")
+        self.replan = request.replan
+        self.use_force_control = request.use_force_control
+        # self.get_logger().info(f"initial poses: {self.poses}")
 
-        if len(self.poses) > 1:
-            self.ee_force_threshold = 2.0
+        # if self.replan:
+        #     update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses))
+        #     self.poses = update_trajectory_response.output_poses
 
-        if not self.use_force_control:
-            self.replan = False
+        #     replan_response = await self.replan_client.call_async(Replan.Request(poses=self.poses))
 
-        if self.replan:
-            update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses))
-            self.poses = update_trajectory_response.output_poses
-
-            replan_response = await self.replan_client.call_async(Replan.Request(poses=self.poses))
-
-            self.joint_trajectories = replan_response.joint_trajectories
+        #     self.joint_trajectories = replan_response.joint_trajectories
 
         if request.state == "publish":
             self.state = State.PUBLISH
@@ -120,19 +159,97 @@ class Executor(Node):
     async def timer_callback(self):
 
         # if force is above threshold, stop executing.
+        # self.get_logger().info(f"upper_threshold: {self.upper_threshold}")
         # self.get_logger().info(f"ee_force: {self.ee_force}")
-        if self.ee_force > self.ee_force_threshold and self.use_force_control and self.joint_trajectories:
+        # self.get_logger().info(f"lower_threshold: {self.lower_threshold}")
+        # self.get_logger().info(f"use force control: {self.use_force_control}")
+        # self.get_logger().info(f"jointtrajectories: {self.joint_trajectories}")
+        if self.ee_force > self.lower_threshold and self.ee_force < self.upper_threshold and self.replan:
+            self.use_force_control = True
+        if self.ee_force > self.upper_threshold and self.use_force_control and self.joint_trajectories:
             self.get_logger().info(
-                f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
+                f"ee_force_threshold: {self.upper_threshold}")
+            self.get_logger().info(
+                f"UPPER FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
 
-            self.joint_trajectories.clear()
-            self.replan = True
-            self.ee_force_threshold = self.ee_force + 3
-            self.get_logger().info("joint trajectories cleared")
+            if self.replan:
+                # clear the current trajectories first, as we don't want to execute them anymore
+                self.get_logger().info("joint trajectories cleared")
+                self.joint_trajectories.clear()
+                # self.future.set_result("done")
+
+                self.upper_threshold = 7.0
+                self.lower_threshold = 1.0
+
+                # current_pose = self.get_transform(
+                #     'panda_link0', 'panda_hand_tcp')
+                # self.poses.insert(0, current_pose)
+
+                # replan the trajectory!!
+                self.get_logger().info(f"poses to be adjusted: {self.poses}")
+                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses, into_board=False))
+
+                self.poses = update_trajectory_response.output_poses
+
+                replan_response = await self.replan_client.call_async(Replan.Request(poses=self.poses))
+
+                self.joint_trajectories = replan_response.joint_trajectories
+                self.poses = replan_response.poses
+
+                self.use_force_control = False
+            else:
+                self.get_logger().info("joint trajectories cleared")
+                self.get_logger().info("poses all done")
+                self.joint_trajectories.clear()
+                self.upper_threshold = 7.0  # this might need to be changed
+                self.lower_threshold = 1.0
+
+        elif self.ee_force < self.lower_threshold and self.use_force_control and self.joint_trajectories:
+            self.get_logger().info(
+                f"LOWER FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
+            # clear the current trajectories first, as we don't want to execute them anymore
+
+            if self.replan:
+                self.get_logger().info("joint trajectories cleared")
+                self.joint_trajectories.clear()
+                # self.future.set_result("done")
+
+                self.upper_threshold = 7.0
+                self.lower_threshold = 1.0
+
+                current_pose = self.get_transform(
+                    'panda_link0', 'panda_hand_tcp')
+                self.poses.insert(0, current_pose)
+
+                # replan the trajectory!!
+                self.get_logger().info(f"poses to be adjusted: {self.poses}")
+                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses, into_board=True))
+
+                self.poses = update_trajectory_response.output_poses
+
+                replan_response = await self.replan_client.call_async(Replan.Request(poses=self.poses))
+
+                self.joint_trajectories = replan_response.joint_trajectories
+                self.poses = replan_response.poses
+
+                self.use_force_control = False
+                # self.pub.publish(self.joint_trajectories[0])
+                # self.joint_trajectories.pop(0)
+                # self.get_logger().info("publishing!!!!!")
+
+            else:
+                self.get_logger().info("joint trajectories cleared")
+                self.get_logger().info("poses all done")
+                self.joint_trajectories.clear()
+                self.upper_threshold = 7.0  # this might need to be changed
+                self.lower_threshold = 1.0
 
         # if list of waypoints is not empty, publish to the topic that executes
         # trajectories oof the panda
-        elif len(self.joint_trajectories) != 0 and self.state == State.PUBLISH and self.i % 10 == 0:
+
+        # fyi if self.joint_trajectories is empty, putting it in the if statement like this will return false
+
+        elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
             # self.get_logger().info(
@@ -140,20 +257,16 @@ class Executor(Node):
 
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
-            # if self.poses:
-            #     self.poses.pop(0)
 
             msg = String(data="Executing Trajectory!")
             self.execute_trajectory_status_pub.publish(msg)
 
-            # if self.i % 50 == 0:
+            if self.ee_force > self.lower_threshold and self.ee_force < self.upper_threshold:
+                self.use_force_control = True
             #     self.allowed_to_replan = True
 
         # if we've reached the goal, send a message to draw.py that says we're done.
-        elif len(self.joint_trajectories) == 0 and self.state == State.PUBLISH:
-
-            msg = String(data="done")
-            self.execute_trajectory_status_pub.publish(msg)
+        elif not self.joint_trajectories and self.state == State.PUBLISH:
 
             self.future.set_result("done")
             self.get_logger().info("done executing!!")
