@@ -49,7 +49,7 @@ class ImageModification(Node):
         # cv2.imshow("binarised", binarised)
         c_min = cv2.getTrackbarPos('Canny_T_min', 'Parameters')
         c_max = cv2.getTrackbarPos('Canny_T_max', 'Parameters')
-        edged = cv2.Canny(blurred, c_min, c_max)
+        edged = cv2.Canny(blurred, 0, 185)
         cv2.imshow("edged", edged)
         # edged_2 = cv2.Canny(gray, c_min, c_max)
         # cv2.imshow("edged_2", edged_2)

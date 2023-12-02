@@ -26,9 +26,14 @@ class Paddle_Ocr(Node):
         self.cap_1 = self.create_subscription(Image, "modified_image_1", self.image_reader_1, qos_profile=10)
         self.cap_2 = self.create_subscription(Image, "modified_image_2", self.image_reader_2, qos_profile=10)
 
+        # create publisher to publish guesses
+        self.guess_publish = self.create_publisher(String, "user_input", 10)
+
         #declare and define parameters
         self.declare_parameter('ocr_frequency', 0.5)
         self.param_ocr_frequency = self.get_parameter('ocr_frequency').get_parameter_value().double_value
+        self.declare_parameter('ocr_threshold', 0.50)
+        self.param_ocr_threshold = self.get_parameter('ocr_threshold').get_parameter_value().double_value
 
         # create timer for calling the ocr function
         self.timer = self.create_timer(1.0/self.param_ocr_frequency, self.ocr_timer)
@@ -47,30 +52,60 @@ class Paddle_Ocr(Node):
         # initialize alphabet dictionary
         self.alphabet_dict = {letter: 0 for letter in string.ascii_uppercase}
 
+        self.guess_pub_tracker = [] # track published guesses
+
     def ocr_timer(self):
         """Call the ocr function"""
-        self.ocr_func(self.frame_1)
-        self.ocr_func(self.frame_2)
+        self.ocr_func_letter(self.frame_1)
+        self.ocr_func_word(self.frame_2)
 
-    def ocr_func(self, frame):
+    def ocr_func_letter(self, frame):
         """Run OCR on the image frame"""
         result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         if result[0] != None:
-            self.guess_verification(result)
+            self.guess_verification_letter(result)
         # print(result)
 
-    def guess_verification(self, result):
+    def ocr_func_word(self, frame):
+        """Run OCR on the image frame"""
+        # result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
+        # if result[0] != None:
+        #     self.guess_verification_letter(result)
+        # # print(result)
+        pass
+
+    def guess_verification_letter(self, result):
         """Confirm whether the guess is a single letter or 6L word"""
         try:
             # check if the guess is a single letter
             if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 1:
-                print(result[0][0][0])
-            # check if the guess is a six letter word
-            elif all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 6:
-                print(result[0][0][0])
+                if result[0][0][1] > self.param_ocr_threshold: # check confidence
+                    self.guess_tracking_letter(result)
+                    print(result[0][0][0])
         except:
             pass
 
+    def guess_tracking_letter(self, result):
+        self.alphabet_dict[result[0][0][0].upper()] += result[0][0][1]
+        print(self.alphabet_dict[result[0][0][0].upper()])
+        if self.alphabet_dict[result[0][0][0].upper()] > 2.0:
+            self.guess_publisher(result[0][0][0].upper())
+            self.alphabet_dict = {letter: 0 for letter in string.ascii_uppercase}
+
+    def guess_publisher(self, guess):
+        """Publish the verified guess"""
+        current_guess = String()
+        publish = True
+        # check if the guess has already been published
+        if len(self.guess_pub_tracker) > 0:
+            for item in self.guess_pub_tracker:
+                if item == guess:
+                    publish = False
+        if publish:
+            self.guess_pub_tracker.append(guess)
+            current_guess.data = guess
+            self.guess_publish.publish(current_guess)
+ 
     def image_reader_1(self, msg):
         """Convert image to opencv format"""
         self.frame_1 = self.cv_bridge.imgmsg_to_cv2(msg)
