@@ -32,7 +32,7 @@ class Paddle_Ocr(Node):
         #declare and define parameters
         self.declare_parameter('ocr_frequency', 0.5)
         self.param_ocr_frequency = self.get_parameter('ocr_frequency').get_parameter_value().double_value
-        self.declare_parameter('ocr_threshold', 0.30)
+        self.declare_parameter('ocr_threshold', 0.50)
         self.param_ocr_threshold = self.get_parameter('ocr_threshold').get_parameter_value().double_value
 
         # create timer for calling the ocr function
@@ -52,6 +52,7 @@ class Paddle_Ocr(Node):
         # initialize alphabet dictionary
         self.alphabet_dict = {letter: 0 for letter in string.ascii_uppercase}
 
+        self.guess_tracker = [] # queue verified word guesses
         self.guess_pub_tracker = [] # track published guesses
 
     def ocr_timer(self):
@@ -60,22 +61,22 @@ class Paddle_Ocr(Node):
         self.ocr_func_word(self.frame_2)
 
     def ocr_func_letter(self, frame):
-        """Run OCR on the image frame"""
+        """Run OCR on the single letter image frame"""
         result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         if result[0] != None:
             self.guess_verification_letter(result)
-        print(result)
+        # print(result)
 
     def ocr_func_word(self, frame):
-        """Run OCR on the image frame"""
-        # result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
-        # if result[0] != None:
-        #     self.guess_verification_letter(result)
+        """Run OCR on the six-letter word image frame"""
+        result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
+        if result[0] != None:
+            self.guess_verification_word(result)
         # # print(result)
         pass
 
     def guess_verification_letter(self, result):
-        """Confirm whether the guess is a single letter or 6L word"""
+        """Confirm whether the guess is a single letter"""
         try:
             # check if the guess is a single letter
             if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 1:
@@ -89,6 +90,16 @@ class Paddle_Ocr(Node):
                     self.guess_tracking_letter([[('O', result[0][0][1])]])
         except:
             pass
+    def guess_verification_word(self, result):
+        """Confirm whether the guess is a six-letter word"""
+        try:
+            # check if the guess is a single letter
+            if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 6:
+                if result[0][0][1] > 0.85: # check confidence
+                    self.guess_tracking_word(result[0][0][0])
+                    print(result[0][0][0])
+        except:
+            pass
 
     def guess_tracking_letter(self, result):
         self.alphabet_dict[result[0][0][0].upper()] += result[0][0][1]
@@ -96,6 +107,16 @@ class Paddle_Ocr(Node):
         if self.alphabet_dict[result[0][0][0].upper()] > 2.0:
             self.guess_publisher(result[0][0][0].upper())
             self.alphabet_dict = {letter: 0 for letter in string.ascii_uppercase}
+    
+    def guess_tracking_word(self, guess):
+        """Keep track of the previous guesses to confirm accuracy"""
+        self.guess_tracker.append(guess)
+        if len(self.guess_tracker) > 3:
+            del self.guess_tracker[0]
+        if len(self.guess_tracker) == 3:
+            if self.guess_tracker[0] == self.guess_tracker[1] and self.guess_tracker[1] == self.guess_tracker[2]:
+                self.guess_tracker = []
+                self.guess_publisher(guess)
 
     def guess_publisher(self, guess):
         """Publish the verified guess"""
@@ -109,6 +130,7 @@ class Paddle_Ocr(Node):
         if publish:
             self.guess_pub_tracker.append(guess)
             current_guess.data = guess
+            self.get_logger().info(f"Registering Guess: {guess}")
             self.guess_publish.publish(current_guess)
  
     def image_reader_1(self, msg):
