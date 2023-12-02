@@ -158,7 +158,7 @@ class Drawing(Node):
         self.cartesian_mp_queue = []  # cartesian motion planner queue
         self.letter_start_point = []
 
-        self.state = State.CALIBRATE
+        self.state = State.WAITING
 
         self.gripper_mass = 1.795750991  # kg
         self.g = 9.81  # m/s**2
@@ -223,7 +223,7 @@ class Drawing(Node):
         Fw = np.array([0, 0, -self.gripper_mass * self.g])
         F6 = np.linalg.inv(Rw6) @ Fw
         M6 = F6 * (p6f + R6f @ self.pc)
-        # M6 = np.array([F6[0] * p6f[2]])
+        # M6 = np.array([F6[0] * p6f[2]])CALIBRATE
 
         # self.get_logger().info(f"R6f @ self.pc: {R6f @ self.pc}")
         # self.get_logger().info(f"p6f: {p6f + R6f @ self.pc}")
@@ -278,10 +278,8 @@ class Drawing(Node):
         self.state = State.PLAN_MOVEGROUP
         self.use_force_control = False
 
-        self.get_logger().info('before future')
         await self.plan_future
-        self.get_logger().info(
-            'after future ####################################################################')
+        self.get_logger().info("MOVEIT MOTION PLAN REQUEST COMPLETE")
 
         self.plan_future = Future()
         self.execute_future = Future()
@@ -329,24 +327,17 @@ class Drawing(Node):
     async def replan_callback(self, request, response):
         self.get_logger().info(f"REPLAN REQUEST RECEIVED")
 
-        self.get_logger().info(f"request.pose: {request.poses}")
-        self.get_logger().info(f"request.poses length: {len(request.poses)}")
+        self.get_logger().info(f"request.pose: {request.pose}")
 
-        self.cartesian_mp_queue.clear()
-        for pose in request.poses:
-            self.cartesian_mp_queue.append(pose)
-            self.cartesian_velocity.append(0.0025)
-
-        # insert a new velocity, because we inserted a new pose in the send_trajectory node
-        # self.cartesian_velocity.insert(0, 0.025)
+        self.cartesian_mp_queue.insert(0, request.pose)
+        self.cartesian_velocity.insert(0, 0.0015)
 
         await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
 
         response.joint_trajectories = self.path_planner.execute_individual_trajectories()
-        response.poses = self.cartesian_mp_queue
 
-        # self.cartesian_mp_queue.pop(0)
-        # self.cartesian_velocity.pop(0)
+        self.cartesian_mp_queue.pop(0)
+        self.cartesian_velocity.pop(0)
 
         return response
 
@@ -460,32 +451,8 @@ class Drawing(Node):
         None
 
         """
-        if self.state == State.CALIBRATE:
 
-            # here we figure out what the force offset should be by using an average.
-            # we take 100 readings of the effort in panda_joint6, and take the average
-            # to assign the force offset in the joint due to gravity.
-            # self.get_logger().info(
-            #     f"self.use_fake_hardware: {self.use_fake_hardware}")
-            # if self.use_fake_hardware:
-            #     self.state = State.WAITING
-            #     return
-
-            while not self.path_planner.current_joint_state.effort:
-                return
-
-            # calibration_cycles = 100
-            # while self.calibration_counter < calibration_cycles:
-            #     self.force_offset += self.path_planner.current_joint_state.effort[5] / (
-            #         self.L1 + self.L2)
-            #     self.calibration_counter += 1
-
-            # self.force_offset = self.force_offset/calibration_cycles
-            # self.get_logger().info(
-            #     f"force offset complete: {self.force_offset}")
-            self.state = State.WAITING
-
-        elif self.state == State.PLAN_MOVEGROUP:
+        if self.state == State.PLAN_MOVEGROUP:
 
             # here we check to see if the big_move queue is empty, and if not,
             # we use the moveit motion planner to create a trajectory.
@@ -522,7 +489,7 @@ class Drawing(Node):
             # queue the remaining poses, so that if force threshold is exceeded,
             # send_trajectories can initiate a replan request directly with the
             # april tags node... trust me.
-            self.joint_trajectories.poses = self.cartesian_mp_queue
+            self.joint_trajectories.pose = self.cartesian_mp_queue[0]
             self.joint_trajectories.replan = self.replan
             self.joint_trajectories.use_force_control = self.use_force_control
             self.get_logger().info(
@@ -554,6 +521,9 @@ class Drawing(Node):
             # the moveit motion planner has completed planning. This will only
             # happen if the state prior was State.PLAN_MOVEGROUP.
 
+            while not self.path_planner.current_joint_state.effort:
+                return
+
             joint_torque_offset = self.calc_joint_torque_offset()
 
             self.ee_force = self.calc_ee_force(
@@ -570,17 +540,6 @@ class Drawing(Node):
             # ee_force_msg.use_force_control = self.use_force_control
 
             self.force_pub.publish(ee_force_msg)
-
-            # if self.execute_future.done():
-            #     # self.get_logger().info(
-            #     #     f"cartesian_np_queue: {self.cartesian_mp_queue}")
-            #     if not self.cartesian_mp_queue:
-            #         self.get_logger().info("plan has been executed")
-            #         self.plan_future.set_result("done")
-            #     else:
-            #         self.get_logger().info("cartesian move was executed")
-            #         self.state = State.PLAN_CARTESIAN_MOVE
-            #         self.execute_future = Future()
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
