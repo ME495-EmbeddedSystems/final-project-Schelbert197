@@ -72,7 +72,7 @@ class Paddle_Ocr(Node):
         result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         if result[0] != None:
             self.guess_verification_word(result)
-        # # print(result)
+        print(result)
         pass
 
     def guess_verification_letter(self, result):
@@ -96,8 +96,9 @@ class Paddle_Ocr(Node):
             # check if the guess is a single letter
             if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 6:
                 if result[0][0][1] > 0.85: # check confidence
-                    self.guess_tracking_word(result[0][0][0])
-                    print(result[0][0][0])
+                    guess = result[0][0][0].upper()
+                    self.guess_tracking_word(guess)
+                    print(guess)
         except:
             pass
 

@@ -79,7 +79,7 @@ class ImageModification(Node):
             cv2.imshow("warped", warped)
             # output = four_point_transform(resized_image, displayCnt.reshape(4, 2))
             height,width = warped.shape
-            border = int(0.1*min(height,width))
+            border = int(0.05*min(height,width))
             x1 = border
             y1 = border
             x2 = width - border
@@ -97,6 +97,8 @@ class ImageModification(Node):
             cv2.imshow("transformed", inverted_image)
             # cv2.imshow("cropped", cropped)
             binary_image = cv2.bitwise_not(binarised)
+            cv2.imshow("binary_image", binary_image)
+
             img_publish_1 = self.cv_bridge.cv2_to_imgmsg(binary_image)
             self.modified_image_1_publish.publish(img_publish_1)
 
@@ -105,19 +107,6 @@ class ImageModification(Node):
 
         except:
             pass
-
-        # kernel = np.ones((13,13),np.uint8)
-        # dilation = cv2.dilate(binarised,kernel,iterations = 1)
-        # inverted_image = cv2.bitwise_not(dilation)
-        # # cv2.imshow("inverted_image", inverted_image)
-        # resized_image = imutils.resize(inverted_image, width=500, height=500)
-        # cv2.imshow("resized_image", resized_image)
-
-        # img_publish_1 = self.cv_bridge.cv2_to_imgmsg(self.frame)
-        # img_publish_2 = self.cv_bridge.cv2_to_imgmsg(resized_image)
-
-        # self.modified_image_1_publish.publish(img_publish_1)
-        # self.modified_image_2_publish.publish(img_publish_2)
 
         cv2.waitKey(30)
 
