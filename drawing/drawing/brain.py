@@ -190,6 +190,9 @@ class Brain(Node):
         self.last_message = msg
         self.ocr_pub.publish(False)
 
+        # Turns off the OCR pipeline
+        self.ocr_pub.publish(False)
+
         self.shape_list = []
         for i in range(0, len(self.last_message.positions)):
             tile_origin = BoardTiles.Request()
