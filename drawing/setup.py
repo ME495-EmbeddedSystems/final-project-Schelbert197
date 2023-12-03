@@ -35,6 +35,8 @@ setup(
             "tags = drawing.tags:Tags_entry",
             "kickstart = drawing.kickstart:main",
             "test = drawing.test:Test_entry",
+            "ocr = drawing.ocr:main",
+            "hangman = drawing.hangman:main"
         ],
     },
 )

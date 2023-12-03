@@ -140,7 +140,7 @@ class Kickstart(Node):
         self.get_logger().info(f"pose_list: {pose_list[1:]}")
         await self.cartesian_client.call_async(request3)
         self.get_logger().info(f"all done")
-        await self.cal_client.call_async(request=Empty.Request())
+       
 
         return response
 
