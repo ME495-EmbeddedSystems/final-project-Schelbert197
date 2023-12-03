@@ -73,9 +73,13 @@ class Executor(Node):
         self.pose = None
         self.ee_force = 0
         self.upper_threshold = 5.0  # N
-        self.lower_threshold = -2.0
+        self.lower_threshold = 1.0  # N
         self.state = None
         self.use_force_control = False
+        self.use_control_loop = False
+        self.force_error = 0.0  # N
+        self.previous_force_error = 0.0  # N
+        self.initial_trajectory_angle = 0.0  # rad
 
         self.distance = 0.01  # distance along quaternion to move
         self.replan = False
@@ -136,21 +140,9 @@ class Executor(Node):
         self.pose = request.current_pose
         self.replan = request.replan
         self.use_force_control = request.use_force_control
+        self.use_control_loop = False
         self.get_logger().info(f"use force control: {self.use_force_control}")
         self.get_logger().info(f"replan: {self.replan}")
-
-        # if not self.use_force_control:
-        #     self.replan = False
-
-        # self.get_logger().info(f"initial poses: {self.pose}")
-
-        # if self.replan:
-        #     update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.pose))
-        #     self.pose = update_trajectory_response.output_poses
-
-        #     replan_response = await self.replan_client.call_async(Replan.Request(poses=self.pose))
-
-        #     self.joint_trajectories = replan_response.joint_trajectories
 
         if request.state == "publish":
             self.state = State.PUBLISH
@@ -163,13 +155,22 @@ class Executor(Node):
 
         return response
 
+    async def replan(self, into_the_board):
+        self.get_logger().info("joint trajectories cleared")
+        self.joint_trajectories.clear()
+
+        # replan the trajectory!!
+        self.get_logger().info(
+            f"pose to be adjusted out of board: {self.pose}")
+        update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_pose=self.pose, into_board=into_the_board))
+
+        self.pose = update_trajectory_response.output_pose
+
+        replan_response = await self.replan_client.call_async(Replan.Request(pose=self.pose))
+
+        self.joint_trajectories = replan_response.joint_trajectories
+
     async def timer_callback(self):
-        # if force is above threshold, stop executing.
-        # self.get_logger().info(f"upper_threshold: {self.upper_threshold}")
-        # self.get_logger().info(f"ee_force: {self.ee_force}")
-        # self.get_logger().info(f"lower_threshold: {self.lower_threshold}")
-        # self.get_logger().info(f"use force control: {self.use_force_control}")
-        # self.get_logger().info(f"jointtrajectories: {self.joint_trajectories}")
 
         if self.ee_force > self.upper_threshold and self.use_force_control and self.joint_trajectories:
             self.get_logger().info(
@@ -179,72 +180,36 @@ class Executor(Node):
 
             if self.replan:
                 # clear the current trajectories first, as we don't want to execute them anymore
-                self.get_logger().info("joint trajectories cleared")
-                self.joint_trajectories.clear()
-                # self.future.set_result("done")
+                self.replan(False)
 
-                # self.upper_threshold = 5.0
+                self.use_control_loop = True
+                self.initial_trajectory_angle = self.joint_trajectories[0].points.positions[5]
+
+                # self.upper_threshold += 3  # essentially turning force control off, for now
                 # self.lower_threshold = 1.0
-
-                # replan the trajectory!!
-                self.get_logger().info(
-                    f"pose to be adjusted out of board: {self.pose}")
-                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_pose=self.pose, into_board=False))
-
-                self.pose = update_trajectory_response.output_pose
-
-                # self.pose.position.y += 0.001
-
-                replan_response = await self.replan_client.call_async(Replan.Request(pose=self.pose))
-
-                self.joint_trajectories = replan_response.joint_trajectories
-
-                self.upper_threshold += 3  # essentially turning force control off, for now
-                self.lower_threshold = 1.0
 
             else:
 
                 self.get_logger().info("joint trajectories cleared")
                 self.get_logger().info("poses all done")
                 self.joint_trajectories.clear()
-                self.upper_threshold = 5.0  # this might need to be changed
-                self.lower_threshold = 1.0
 
-        elif self.ee_force < self.lower_threshold and self.use_force_control and self.joint_trajectories:
-            self.get_logger().info(
-                f"lower_threshold: {self.lower_threshold}")
-            self.get_logger().info(
-                f"LOWER FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
-            # self.get_logger().info(f"joint trajectories: {self.joint_trajectories}")
-            # clear the current trajectories first, as we don't want to execute them anymore
+        # elif self.ee_force < self.lower_threshold and self.use_force_control and self.joint_trajectories:
+        #     self.get_logger().info(
+        #         f"lower_threshold: {self.lower_threshold}")
+        #     self.get_logger().info(
+        #         f"LOWER FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
+        #     # self.get_logger().info(f"joint trajectories: {self.joint_trajectories}")
+        #     # clear the current trajectories first, as we don't want to execute them anymore
 
-            if self.replan:
-                self.get_logger().info("joint trajectories cleared")
-                self.joint_trajectories.clear()
+        #     if self.replan:
+        #         self.replan(True)
 
-                # replan the trajectory!!
-                self.get_logger().info(
-                    f"pose to be adjusted into board: {self.pose}")
-                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_pose=self.pose, into_board=True))
+        #         self.use_control_loop = True
+        #         self.initial_trajectory_angle = self.joint_trajectories[0].points.positions[5]
 
-                self.pose = update_trajectory_response.output_pose
-
-                # self.pose.position.y -= 0.001
-
-                replan_response = await self.replan_client.call_async(Replan.Request(pose=self.pose))
-
-                self.joint_trajectories = replan_response.joint_trajectories
-
-                self.upper_threshold = 5  # essentially turning force control off, for now
-                self.lower_threshold -= 3
-
-            else:
-                self.lower_threshold = -1.5
-            #     self.get_logger().info("joint trajectories cleared")
-            #     self.get_logger().info("poses all done")
-            #     self.joint_trajectories.clear()
-            #     self.upper_threshold = 5.0  # this might need to be changed
-            #     self.lower_threshold = 1.0
+        #     else:
+        #         self.lower_threshold = -1.5
 
         # if list of waypoints is not empty, publish to the topic that executes
         # trajectories oof the panda
@@ -254,21 +219,36 @@ class Executor(Node):
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
-            # self.get_logger().info(f"goal pose: {self.pose}")
+            Kp = 0.001
+            Kd = 0.001
 
-            self.pub.publish(self.joint_trajectories[0])
-            self.joint_trajectories.pop(0)
+            # self.pub.publish(self.joint_trajectories[0])
+            # self.joint_trajectories.pop(0)
 
-            msg = String(data="Executing Trajectory!")
-            self.execute_trajectory_status_pub.publish(msg)
+            if self.use_control_loop:
+                force_error = 3 - self.ee_force
+                angle_adjustment = Kp * force_error + Kd * \
+                    (force_error - self.previous_force_error)
+                self.joint_trajectories[0].points.positions[5] += angle_adjustment
+                # here i'm assuming joint angle 6 is basically the same
+                # for all trjactories, which may or may not be true.
 
-            # turn force control back on after we've published one trajectory
-            # if self.i % 300 == 0 and self.replan:
-            #     self.upper_threshold = 5.0
-            #     self.lower_threshold = 1.0
-            # if self.ee_force > self.lower_threshold and self.ee_force < self.upper_threshold:
-            #     self.use_force_control = True
-            #     self.allowed_to_replan = True
+                difference_from_initial = self.joint_trajectories[0].points.positions[5]
+
+                if difference_from_initial > 0.09:
+                    self.replan(False)
+                elif difference_from_initial < -0.09:
+                    self.replan(True)
+
+                self.pub.publish(self.joint_trajectories[0])
+                self.joint_trajectories.pop(0)
+
+                self.get_logger().info("joint trajectories cleared")
+                self.joint_trajectories.clear()
+
+            else:
+                self.pub.publish(self.joint_trajectories[0])
+                self.joint_trajectories.pop(0)
 
         # if we've reached the goal, send a message to draw.py that says we're done.
         elif not self.joint_trajectories and self.state == State.PUBLISH:
