@@ -44,17 +44,24 @@ class Brain(Node):
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
         
+        # Callback groups
+        self.cal_callback_group = MutuallyExclusiveCallbackGroup()
+        self.tile_callback_group = MutuallyExclusiveCallbackGroup()
+        self.mp_callback_group = MutuallyExclusiveCallbackGroup()
+        self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
+        self.kick_callback_group = MutuallyExclusiveCallbackGroup()
+        
         # Create clients
         self.board_service_client = self.create_client(
-            BoardTiles, '/where_to_write')  # create custom service type
+            BoardTiles, '/where_to_write', callback_group=self.tile_callback_group)  # create custom service type
         self.calibrate_service_client = self.create_client(
-            Empty, 'calibrate')  # create custom service type
+            Empty, 'calibrate', callback_group=self.cal_callback_group)  # create custom service type
         self.movepose_service_client = self.create_client(
-            MovePose, '/moveit_mp')  # create custom service type
+            MovePose, '/moveit_mp', callback_group=self.mp_callback_group)  # create custom service type
         self.cartesian_mp_service_client = self.create_client(
-            Cartesian, '/cartesian_mp')  # create custom service type
+            Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)  # create custom service type
         self.kickstart_service_client = self.create_client(
-            Empty, '/kickstart')
+            Empty, '/kickstart', callback_group=self.kick_callback_group)
 
         # Create subscription from hangman.py
         self.hangman = self.create_subscription(
@@ -81,6 +88,7 @@ class Brain(Node):
         self.board_future = None
 
         self.state = State.INITIALIZE
+        self.create_letters()
 
     def create_letters(self):
         """Create the dictionary of bubble letters"""
@@ -176,7 +184,7 @@ class Brain(Node):
 
         self.shape_list = []
         for i in range (0,len(self.last_message.positions)):
-            tile_origin = BoardTiles()
+            tile_origin = BoardTiles.Request()
             tile_origin.mode = self.last_message.mode[i]
             tile_origin.position = self.last_message.positions[i]
             
@@ -194,62 +202,102 @@ class Brain(Node):
             self.state = State.WRITING
         else:
             self.state = State.WAITING
+            
+    async def letter_writer(self, shape: BoardTiles.Request()):
+        """Function to process the shape into trajectory service calls"""
+        resp = await self.tile_client.call_async(shape)
+        pose1 = resp.initial_pose
+        pose_list = resp.pose_list
 
-    def timer_callback(self):
+        self.get_logger().info(f"Pose List for Dash: {pose1}")
+        self.get_logger().info(f"Pose List for Dash: {pose_list}")
+        request2 = Cartesian.Request()
+        request2.poses = [pose1]
+        request2.velocity = 0.1
+        request2.replan = False
+        request2.use_force_control = [False]
+        await self.cartesian_client.call_async(request2)
+        self.get_logger().info(f"one done")
+
+        request2 = Cartesian.Request()
+        request2.poses = [pose_list[0]]
+        request2.velocity = 0.015
+        request2.replan = False
+        request2.use_force_control = [shape.onboard[0]]
+        await self.cartesian_client.call_async(request2)
+        self.get_logger().info(f"second done")
+        # draw remaining pose dashes with Cartesian mp
+        request3 = Cartesian.Request()
+        request3.poses = pose_list[1:]
+        request3.velocity = 0.015
+        request3.replan = True
+        request3.use_force_control = shape.onboard[1:]
+        self.get_logger().info(f"pose_list: {pose_list[1:]}")
+        await self.cartesian_client.call_async(request3)
+        self.get_logger().info(f"all done")
+        
+        self.shape_list.pop[0]
+
+    async def timer_callback(self):
         if self.state == State.INITIALIZE:
             # Initializes the kickstart feature then waits for completion
-            self.kick_future = self.kickstart_service_client.call_async(Empty)
+            await self.kickstart_service_client.call_async(request=Empty.Request())
+            self.ocr_pub.publish(True)
             self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:
             # Starts calibration then moves to waiting
-            self.calibrate_future = self.calibrate_service_client.call_async(Empty)
-            self.state = State.WAITING
+            await self.calibrate_service_client.call_async(request=Empty.Request())
+            self.state = State.LETTER
 
-        elif self.state == State.APPROACHING:
-            # Calls the service for the approach pose then moves to writing state
-            self.movepose_future = self.movepose_service_client.call_async(self.current_mp_pose)
-            self.state = State.WRITING
+        # elif self.state == State.APPROACHING:
+        #     # Calls the service for the approach pose then moves to writing state
+        #     #TODO: use cartician move
+        #     await self.movepose_service_client.call_async(self.current_mp_pose)
+        #     self.state = State.WRITING
 
         elif self.state == State.LETTER:
             if self.shape_list:
                 # moves to the approaching state if there are still things to be written
-                self.board_future = self.board_service_client.call_async(self.shape_list[0])
-                self.state = State.WAITING
+                await self.letter_writer(self.shape_list[0])
+                
+                # self.state = State.WAITING
             else:
                 # Turns on the OCR because the play has ended and returns to WAITING
                 self.ocr_pub.publish(True)
                 self.state = State.WAITING
 
         elif self.state == State.WAITING:
+            pass
             # waiting state for writing actions
-            if self.kick_future:
+            # if self.kick_future:
                 # Turns on OCR when kickstart finishes and waits for hangman callback
-                self.ocr_pub.publish(True)
-                self.kick_future = None
-            elif self.calibrate_future:
-                # Listens for a return value from calibration to switch to LETTER
-                self.state = State.LETTER
-                self.calibrate_future = None
-            elif self.board_future:
-                # Looks that board has returned values
-                # Assigns poses for approach and cartesian then moves to APPROACHING
-                self.current_mp_pose = self.board_future.initial_pose
-                self.current_traj_poses = self.board_future.pose_list
-                self.board_future = None
-                self.state = State.APPROACHING
-            else:
+            
+                # self.kick_future = None
+            # elif self.calibrate_future:
+            #     # Listens for a return value from calibration to switch to LETTER
+                
+            #     self.calibrate_future = None
+            # elif self.board_future:
+            #     # Looks that board has returned values
+            #     # Assigns poses for approach and cartesian then moves to APPROACHING
+            #     self.current_mp_pose = self.board_future.initial_pose
+            #     self.current_traj_poses = self.board_future.pose_list
+            #     self.board_future = None
+            #     self.state = State.APPROACHING
+            # else:
                 # If nothing has returned from client call, WAITING passes
-                pass
+            
 
-        elif self.state == State.WRITING:
-            # waiting state for the Franka to complete the mp and cartesian trajectories
-            # in 2 steps before it moves back to LETTER
-            if self.movepose_future:
-                self.cartesian_mp_service_client.call_async(self.current_traj_poses)
-                self.movepose_future = None
-            else:
-                pass
+        # elif self.state == State.WRITING:
+        #     # waiting state for the Franka to complete the mp and cartesian trajectories
+        #     # in 2 steps before it moves back to LETTER
+        #     if self.movepose_future:
+        #         #TODO: update for use_forece_control
+        #         self.cartesian_mp_service_client.call_async(self.current_traj_poses)
+        #         self.movepose_future = None
+        #     else:
+        #         pass
             # Node will only leave this state once trajectory_status returns 'done'
 
 

@@ -44,20 +44,22 @@ class Grid:
 
     def grid_to_world(self, mode, position):
         if mode == 0:
-            point = (4, position+2)
-        if mode == 1:
             point = (1, position+2)
+        if mode == 1:
+            point = (4, position+2)
         if mode == 2:
             if position == 0:
-                point = (1, 0)
+                point = (4, 0)
             if position == 1:
-                point = (2, 1)
-            if position == 2:
-                point = (2, 0)
-            if position == 3:
-                point = (3, 0)
-            if position == 4:
                 point = (3, 1)
+            if position == 2:
+                point = (3, 0)
+            if position == 3:
+                point = (2, 0)
+            if position == 4:
+                point = (2, 1)
+        if mode == 3:
+            point = (1,0)
 
         point_y = (point[0])*self.cell_size + self.yrange[0]
         point_x = (point[1])*self.cell_size + self.xrange[0]
@@ -276,7 +278,7 @@ class Tags(Node):
 
         board_request = Box.Request()
         board_request.pose = board_pose
-        board_request.size = [2.6, 2.2, 0.04]
+        board_request.size = [2.6, 2.2, 0.06]
         await self.make_board_client.call_async(board_request)
         # self.robot_board_write.transform.translation = pos
         # self.robot_board_write.transform.rotation = rotation
@@ -326,7 +328,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.00 if request.onboard[i] else 0.17
+            z = 0.004 if request.onboard[i] else 0.1
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
@@ -362,9 +364,9 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] - 0.004
+            z = ansT[2] + 0.003
         else:
-            z = ansT[2] + 0.004
+            z = ansT[2] - 0.003
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
