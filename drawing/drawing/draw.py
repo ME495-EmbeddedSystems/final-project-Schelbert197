@@ -70,11 +70,6 @@ class Drawing(Node):
         self.use_fake_hardware = self.get_parameter(
             'use_fake_hardware').get_parameter_value().bool_value
 
-        # if self.use_fake_hardware == "true":
-        #     self.use_fake_hardware = True
-        # else:
-        #     self.use_fake_hardware = False
-
         self.x_init = self.get_parameter(
             'x_init').get_parameter_value().double_value
         self.y_init = self.get_parameter(
@@ -99,7 +94,7 @@ class Drawing(Node):
         self.execute_joint_trajectories_callback_group = MutuallyExclusiveCallbackGroup()
         self.board_service_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
-            0.01, self.timer_callback, callback_group=self.timer_callback_group)
+            0.001, self.timer_callback, callback_group=self.timer_callback_group)
 
         self.path_planner = Path_Plan_Execute(self)
 
@@ -123,9 +118,8 @@ class Drawing(Node):
 
         self.replan_service = self.create_service(
             Replan, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
-        
-        
-        #service to make 
+
+        # service to make
         self.create_box_service = self.create_service(
             Box, '/make_board', self.board_callback, callback_group=self.board_service_callback_group)
 
@@ -179,11 +173,14 @@ class Drawing(Node):
         self.force_offset = 0.0  # N
         self.force_threshold = 3.0  # N
         self.calibration_counter = 0.0  # N
-        self.ee_force = 0.0  # N
+        # list bc moving average
+        self.ee_force = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  # N
 
         self.cartesian_velocity = []
         self.use_force_control = []
         self.replan = False
+
+        self.i = 0
 
         self.joint_trajectories = ExecuteJointTrajectories.Request()
 
@@ -291,8 +288,6 @@ class Drawing(Node):
         self.plan_future = Future()
         self.execute_future = Future()
 
-
-
         return response
 
     async def cartesian_mp_callback(self, request, response):
@@ -394,11 +389,11 @@ class Drawing(Node):
         self.state = State.WAITING
 
         return response
-    
-    def board_callback(self,request, response):
+
+    def board_callback(self, request, response):
         box_id = 'board'
         frame_id = 'panda_link0'
-        dimensions = request.size # size
+        dimensions = request.size  # size
         pose = request.pose  # position
 
         # Add the box to the planning scene using the add_box method
@@ -551,20 +546,16 @@ class Drawing(Node):
 
             joint_torque_offset = self.calc_joint_torque_offset()
 
-            self.ee_force = self.calc_ee_force(
-                self.path_planner.current_joint_state.effort[5] - joint_torque_offset)
+            self.ee_force.append(self.calc_ee_force(
+                self.path_planner.current_joint_state.effort[5] - joint_torque_offset)[2])
+            self.ee_force.pop(0)
 
-            # self.get_logger().info(f"ee_force: {self.ee_force}")
-            # self.get_logger().info(
-            #     f"joint6 torque: {self.path_planner.current_joint_state.effort[5]}")
-            # self.get_logger().info(
-            #     f"joint torque offset: {joint_torque_offset}")
+            if self.i % 10:  # publish the message at a frequency of 100hz
+                ee_force_avg = np.average(self.ee_force)
 
-            ee_force_msg = EEForce()
-            ee_force_msg.ee_force = self.ee_force[2]
-            # ee_force_msg.use_force_control = self.use_force_control
-
-            self.force_pub.publish(ee_force_msg)
+                ee_force_msg = EEForce()
+                ee_force_msg.ee_force = self.ee_force[2]
+                self.force_pub.publish(ee_force_msg)
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
