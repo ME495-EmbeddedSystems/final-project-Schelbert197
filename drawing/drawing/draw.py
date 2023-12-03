@@ -397,7 +397,7 @@ class Drawing(Node):
         pose = request.pose  # position
 
         # Add the box to the planning scene using the add_box method
-        self.path_planner.add_box(box_id, frame_id, dimensions, pose)
+        # self.path_planner.add_box(box_id, frame_id, dimensions, pose)
         return response
 
     def get_transform(self, parent_frame, child_frame):
@@ -546,6 +546,9 @@ class Drawing(Node):
 
             joint_torque_offset = self.calc_joint_torque_offset()
 
+            # self.get_logger().info(
+            #     f"joint torque offset: {joint_torque_offset}")
+
             self.ee_force.append(self.calc_ee_force(
                 self.path_planner.current_joint_state.effort[5] - joint_torque_offset)[2])
             self.ee_force.pop(0)
@@ -554,13 +557,14 @@ class Drawing(Node):
                 ee_force_avg = np.average(self.ee_force)
 
                 ee_force_msg = EEForce()
-                ee_force_msg.ee_force = self.ee_force[2]
+                ee_force_msg.ee_force = ee_force_avg
                 self.force_pub.publish(ee_force_msg)
 
             if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
 
                 self.state = State.EXECUTING
                 self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
+        self.i += 1
 
 
 def main(args=None):

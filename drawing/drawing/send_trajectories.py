@@ -140,9 +140,11 @@ class Executor(Node):
         self.pose = request.current_pose
         self.replan = request.replan
         self.use_force_control = request.use_force_control
-        self.use_control_loop = False
+        if not self.use_force_control:
+            self.use_control_loop = False
         self.get_logger().info(f"use force control: {self.use_force_control}")
         self.get_logger().info(f"replan: {self.replan}")
+        self.get_logger().info(f"use control loop: {self.use_control_loop}")
 
         if request.state == "publish":
             self.state = State.PUBLISH
@@ -155,7 +157,7 @@ class Executor(Node):
 
         return response
 
-    async def replan(self, into_the_board):
+    async def replan_trajectory(self, into_the_board):
         self.get_logger().info("joint trajectories cleared")
         self.joint_trajectories.clear()
 
@@ -171,6 +173,7 @@ class Executor(Node):
         self.joint_trajectories = replan_response.joint_trajectories
 
     async def timer_callback(self):
+        # self.get_logger().info(f"ee_force: {self.ee_force}")
 
         if self.ee_force > self.upper_threshold and self.use_force_control and self.joint_trajectories:
             self.get_logger().info(
@@ -180,10 +183,11 @@ class Executor(Node):
 
             if self.replan:
                 # clear the current trajectories first, as we don't want to execute them anymore
-                self.replan(False)
+                await self.replan_trajectory(False)
 
                 self.use_control_loop = True
-                self.initial_trajectory_angle = self.joint_trajectories[0].points.positions[5]
+                self.use_force_control = False
+                self.initial_trajectory_angle = self.joint_trajectories[0].points[0].positions[5]
 
                 # self.upper_threshold += 3  # essentially turning force control off, for now
                 # self.lower_threshold = 1.0
@@ -206,7 +210,7 @@ class Executor(Node):
         #         self.replan(True)
 
         #         self.use_control_loop = True
-        #         self.initial_trajectory_angle = self.joint_trajectories[0].points.positions[5]
+        #         self.initial_trajectory_angle = self.joint_trajectories[0].points[0].positions[5]
 
         #     else:
         #         self.lower_threshold = -1.5
@@ -222,29 +226,42 @@ class Executor(Node):
             Kp = 0.001
             Kd = 0.001
 
+            # self.get_logger().info(
+            #     f"joint_Trajectory: {self.joint_trajectories[0].points[0]}")
+
             # self.pub.publish(self.joint_trajectories[0])
             # self.joint_trajectories.pop(0)
 
+            self.get_logger().info(
+                f"user control loop: {self.use_control_loop}")
+            self.get_logger().info(
+                f"initial angle: {self.initial_trajectory_angle}")
+
             if self.use_control_loop:
+                self.get_logger().info(
+                    f"original joint pos: {self.joint_trajectories[0].points[0].positions[5]}")
                 force_error = 3 - self.ee_force
                 angle_adjustment = Kp * force_error + Kd * \
                     (force_error - self.previous_force_error)
-                self.joint_trajectories[0].points.positions[5] += angle_adjustment
+                self.joint_trajectories[0].points[0].positions[5] += angle_adjustment
                 # here i'm assuming joint angle 6 is basically the same
                 # for all trjactories, which may or may not be true.
 
-                difference_from_initial = self.joint_trajectories[0].points.positions[5]
+                difference_from_initial = self.joint_trajectories[0].points[
+                    0].positions[5] - self.initial_trajectory_angle
+
+                self.get_logger().info(
+                    f"modified joint pos: {self.joint_trajectories[0].points[0].positions[5]}")
 
                 if difference_from_initial > 0.09:
-                    self.replan(False)
+                    self.get_logger().info(f"tilted too far forward, replannign")
+                    await self.replan_trajectory(False)
                 elif difference_from_initial < -0.09:
-                    self.replan(True)
+                    self.get_logger().info(f"tilted too far backward, replannign")
+                    await self.replan_trajectory(True)
 
                 self.pub.publish(self.joint_trajectories[0])
                 self.joint_trajectories.pop(0)
-
-                self.get_logger().info("joint trajectories cleared")
-                self.joint_trajectories.clear()
 
             else:
                 self.pub.publish(self.joint_trajectories[0])

@@ -59,7 +59,7 @@ class Grid:
             if position == 4:
                 point = (2, 1)
         if mode == 3:
-            point = (1,0)
+            point = (1, 0)
 
         point_y = (point[0])*self.cell_size + self.yrange[0]
         point_x = (point[1])*self.cell_size + self.xrange[0]
