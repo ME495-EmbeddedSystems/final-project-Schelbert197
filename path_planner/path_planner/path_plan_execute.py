@@ -490,7 +490,6 @@ class Path_Plan_Execute():
         """
         self.goal_orientation = orientation
 
-    
     def add_box(self, box_id, frame_id, dimensions, pose):
         """
         Add a collision box to the rviz scene.
@@ -518,5 +517,6 @@ class Path_Plan_Execute():
 
         collision_object.primitives.append(box_size)
         collision_object.primitive_poses.append(box_pose)
+        self.node.get_logger().info("heeeeeeeeeeeeeeeeeeeeeeeeeeeer")
 
         self.planning_scene_publisher.publish(collision_object)

@@ -107,7 +107,7 @@ class Tags(Node):
         self.move_js_client = self.create_client(
             MovePose, 'moveit_mp', callback_group=self.move_js_callback_group)
         self.make_board_client = self.create_client(
-            MovePose, '/make_board', callback_group=self.move_js_callback_group)
+            Box, '/make_board', callback_group=self.make_board_callback_group)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -136,7 +136,7 @@ class Tags(Node):
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
                 'Move Joint State service not available, waiting again...')
-            
+
         while not self.make_board_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
                 'Make Board service not available, waiting again...')
@@ -260,25 +260,28 @@ class Tags(Node):
 
         self.boardT = Trb1
         self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(Trb1)
+        pos, rotation = self.matrix_to_position_quaternion(self.boardT)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
         self.robot_board.transform.rotation = rotation
-        
+
         # pos, rotation = self.matrix_to_position_quaternion(Trb2)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
-        board_pose = Pose(position= pos, orientation= rotation)
+        p, r = self.matrix_to_position_quaternion(self.boardT, 1)
+        board_pose = Pose()
+        board_pose.position = p
+        board_pose.orientation = r
+
         board_request = Box.Request()
         board_request.pose = board_pose
-        board_request.size = [1.0,2.0,3.0]
+        board_request.size = [2.6, 2.2, 0.04]
         await self.make_board_client.call_async(board_request)
         # self.robot_board_write.transform.translation = pos
         # self.robot_board_write.transform.rotation = rotation
-        
-        
-        # self.state = State.OTHER
+
+        self.state = State.OTHER
         self.get_logger().info(f'Trb: {pos,rotation}')
 
         self.get_logger().info("calibrate")
@@ -340,9 +343,7 @@ class Tags(Node):
             pos = Pose()
             pos.position = position
             pos.orientation = rotation
-            
-            
-            
+
             self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
                 Tra)
             self.get_logger().info(f'pose is: {pos}')
