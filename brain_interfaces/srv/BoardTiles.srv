@@ -9,3 +9,4 @@ bool[] onboard
 # returns a Pose
 geometry_msgs/Pose initial_pose
 geometry_msgs/Pose[] pose_list
+bool[] use_force_control

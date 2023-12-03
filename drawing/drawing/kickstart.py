@@ -71,10 +71,10 @@ class Kickstart(Node):
 
         # DASHES
         # [0.01, 0.1, 0.15, 0.19]
-        dash_x = [0.01, 0.03, 0.08, 0.14, 0.19, 0.19]
-        dash_y = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [0.0, 0.0, 0.0, 0.0]
+        dash_x = [0.01, 0.03, 0.08,0.08, 0.14, 0.19, 0.19]
+        dash_y = [0.0, 0.0, 0.0, 0.0,0.0, 0.0, 0.0]  # [0.0, 0.0, 0.0, 0.0]
         # [True, True, True, False]
-        dash_on = [True, True, True, True, True, False]
+        dash_on = [True, True, False, True, True, True, False]
 
         # WRONG DASHES
         # 1st wrong dash info
@@ -82,13 +82,14 @@ class Kickstart(Node):
         request.mode = 0
         request.position = 2
         request.x = dash_x
-        request.y = dash_y
+        request.y = dash_x
         request.onboard = dash_on
 
         # denote pose_list and initial_pose from BoardTiles response
         resp = await self.tile_client.call_async(request)
         pose1 = resp.initial_pose
         pose_list = resp.pose_list
+        use_force_control = resp.use_force_control
 
         self.get_logger().info(f"Pose List for Dash: {pose1}")
         self.get_logger().info(f"Pose List for Dash: {pose_list}")
@@ -118,6 +119,8 @@ class Kickstart(Node):
         request2.poses = [pose1]
         request2.velocity = 0.1
         request2.replan = False
+        request2.use_force_control = [False]
+        
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"one done")
 
@@ -125,6 +128,7 @@ class Kickstart(Node):
         request2.poses = [pose_list[0]]
         request2.velocity = 0.015
         request2.replan = False
+        request2.use_force_control = [dash_on[0]]
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"second done")
         # draw remaining pose dashes with Cartesian mp
@@ -132,9 +136,11 @@ class Kickstart(Node):
         request3.poses = pose_list[1:]
         request3.velocity = 0.015
         request3.replan = True
+        request3.use_force_control = dash_on[1:]
         self.get_logger().info(f"pose_list: {pose_list[1:]}")
         await self.cartesian_client.call_async(request3)
         self.get_logger().info(f"all done")
+        await self.cal_client.call_async(request=Empty.Request())
 
         return response
 

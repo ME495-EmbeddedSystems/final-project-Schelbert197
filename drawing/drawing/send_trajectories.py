@@ -136,6 +136,7 @@ class Executor(Node):
         self.pose = request.current_pose
         self.replan = request.replan
         self.use_force_control = request.use_force_control
+        self.get_logger().info(f"use force control: {self.use_force_control}")
         # self.get_logger().info(f"initial poses: {self.pose}")
 
         # if self.replan:
@@ -253,7 +254,7 @@ class Executor(Node):
             self.execute_trajectory_status_pub.publish(msg)
 
             # turn force control back on after we've published one trajectory
-            if self.i % 250 == 0:
+            if self.i % 125 == 0 and self.replan:
                 self.use_force_control = True
             # if self.ee_force > self.lower_threshold and self.ee_force < self.upper_threshold:
             #     self.use_force_control = True

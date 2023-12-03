@@ -174,9 +174,9 @@ class Drawing(Node):
         self.force_threshold = 3.0  # N
         self.calibration_counter = 0.0  # N
         self.ee_force = 0.0  # N
-        self.use_force_control = False
 
         self.cartesian_velocity = []
+        self.use_force_control = []
         self.replan = False
 
         self.joint_trajectories = ExecuteJointTrajectories.Request()
@@ -276,7 +276,7 @@ class Drawing(Node):
 
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
-        self.use_force_control = False
+        self.use_force_control.append(request.use_force_control)
 
         await self.plan_future
         self.get_logger().info("MOVEIT MOTION PLAN REQUEST COMPLETE")
@@ -315,7 +315,7 @@ class Drawing(Node):
             self.cartesian_velocity.append(request.velocity)
 
         self.state = State.PLAN_CARTESIAN_MOVE
-        self.use_force_control = True
+        self.use_force_control = request.use_force_control
 
         await self.plan_future
 
@@ -466,13 +466,14 @@ class Drawing(Node):
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
             self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.current_pose = self.moveit_mp_queue[0]
-            self.joint_trajectories.use_force_control = self.use_force_control
+            self.joint_trajectories.use_force_control = self.use_force_control[0]
 
             self.path_planner.plan_path()
 
             self.state = State.WAITING
 
             self.moveit_mp_queue.pop(0)
+            self.use_force_control.pop(0)
 
         elif self.state == State.PLAN_CARTESIAN_MOVE:
 
@@ -492,7 +493,7 @@ class Drawing(Node):
 
             self.joint_trajectories.current_pose = self.cartesian_mp_queue[0]
             self.joint_trajectories.replan = self.replan
-            self.joint_trajectories.use_force_control = self.use_force_control
+            self.joint_trajectories.use_force_control = self.use_force_control[0]
             self.get_logger().info(
                 f"cartesian queue: {self.cartesian_mp_queue}")
 
@@ -501,6 +502,7 @@ class Drawing(Node):
 
             self.cartesian_mp_queue.pop(0)
             self.cartesian_velocity.pop(0)
+            self.use_force_control.pop(0)
 
             self.state = State.EXECUTING
 
