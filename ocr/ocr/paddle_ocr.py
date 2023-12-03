@@ -103,10 +103,14 @@ class Paddle_Ocr(Node):
             pass
 
     def guess_tracking_letter(self, result):
+        """Keep track of the previous guesses to confirm accuracy"""
+        # add the guess confidence value to the alphabet dictionary
         self.alphabet_dict[result[0][0][0].upper()] += result[0][0][1]
         print(self.alphabet_dict[result[0][0][0].upper()])
+        # pass the guess to the publisher if value exeeds threshold
         if self.alphabet_dict[result[0][0][0].upper()] > 2.0:
             self.guess_publisher(result[0][0][0].upper())
+            # reinitialize alphabet dictionary
             self.alphabet_dict = {letter: 0 for letter in string.ascii_uppercase}
     
     def guess_tracking_word(self, guess):
@@ -115,6 +119,7 @@ class Paddle_Ocr(Node):
         if len(self.guess_tracker) > 3:
             del self.guess_tracker[0]
         if len(self.guess_tracker) == 3:
+            # check if 3 consecutive guesses are same
             if self.guess_tracker[0] == self.guess_tracker[1] and self.guess_tracker[1] == self.guess_tracker[2]:
                 self.guess_tracker = []
                 self.guess_publisher(guess)
