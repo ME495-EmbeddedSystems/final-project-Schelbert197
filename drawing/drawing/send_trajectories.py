@@ -133,16 +133,16 @@ class Executor(Node):
         self.i = 0
 
         self.joint_trajectories = request.joint_trajectories
-        self.pose = request.pose
+        self.pose = request.current_pose
         self.replan = request.replan
         self.use_force_control = request.use_force_control
-        # self.get_logger().info(f"initial poses: {self.poses}")
+        # self.get_logger().info(f"initial poses: {self.pose}")
 
         # if self.replan:
-        #     update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses))
-        #     self.poses = update_trajectory_response.output_poses
+        #     update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.pose))
+        #     self.pose = update_trajectory_response.output_poses
 
-        #     replan_response = await self.replan_client.call_async(Replan.Request(poses=self.poses))
+        #     replan_response = await self.replan_client.call_async(Replan.Request(poses=self.pose))
 
         #     self.joint_trajectories = replan_response.joint_trajectories
 
@@ -156,27 +156,6 @@ class Executor(Node):
         self.future = Future()
 
         return response
-
-    async def replan_trajectories(self, into_board):
-        # clear the current trajectories first, as we don't want to execute them anymore
-        self.get_logger().info("joint trajectories cleared")
-        self.joint_trajectories.clear()
-
-        # self.upper_threshold = 7.0
-        # self.lower_threshold = 1.0
-
-        # replan the trajectory!!
-        self.get_logger().info(f"pose to be adjusted: {self.pose}")
-        update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_pose=self.pose, into_board=False))
-
-        self.pose = update_trajectory_response.output_pose
-
-        replan_response = await self.replan_client.call_async(Replan.Request(poses=self.pose))
-
-        self.joint_trajectories = replan_response.joint_trajectories
-        self.poses = replan_response.poses
-
-        self.use_force_control = False
 
     async def timer_callback(self):
         # if force is above threshold, stop executing.
@@ -202,12 +181,15 @@ class Executor(Node):
                 # self.lower_threshold = 1.0
 
                 # replan the trajectory!!
-                self.get_logger().info(f"pose to be adjusted: {self.pose}")
+                self.get_logger().info(
+                    f"pose to be adjusted out of board: {self.pose}")
                 update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_pose=self.pose, into_board=False))
 
                 self.pose = update_trajectory_response.output_pose
 
-                replan_response = await self.replan_client.call_async(Replan.Request(poses=update_trajectory_response.output_pose))
+                # self.pose.position.y += 0.001
+
+                replan_response = await self.replan_client.call_async(Replan.Request(pose=self.pose))
 
                 self.joint_trajectories = replan_response.joint_trajectories
 
@@ -233,12 +215,15 @@ class Executor(Node):
                 self.joint_trajectories.clear()
 
                 # replan the trajectory!!
-                self.get_logger().info(f"poses to be adjusted: {self.poses}")
-                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_poses=self.poses, into_board=True))
+                self.get_logger().info(
+                    f"pose to be adjusted into board: {self.pose}")
+                update_trajectory_response = await self.update_trajectory_client.call_async(UpdateTrajectory.Request(input_pose=self.pose, into_board=True))
 
                 self.pose = update_trajectory_response.output_pose
 
-                replan_response = await self.replan_client.call_async(Replan.Request(poses=self.pose))
+                # self.pose.position.y -= 0.001
+
+                replan_response = await self.replan_client.call_async(Replan.Request(pose=self.pose))
 
                 self.joint_trajectories = replan_response.joint_trajectories
 
@@ -257,9 +242,9 @@ class Executor(Node):
         # fyi if self.joint_trajectories is empty, putting it in the if statement like this will return false
 
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
-            self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
+            # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
-            self.get_logger().info(f"goal pose: {self.pose}")
+            # self.get_logger().info(f"goal pose: {self.pose}")
 
             self.pub.publish(self.joint_trajectories[0])
             self.joint_trajectories.pop(0)
@@ -268,7 +253,8 @@ class Executor(Node):
             self.execute_trajectory_status_pub.publish(msg)
 
             # turn force control back on after we've published one trajectory
-            self.use_force_control = True
+            if self.i % 250 == 0:
+                self.use_force_control = True
             # if self.ee_force > self.lower_threshold and self.ee_force < self.upper_threshold:
             #     self.use_force_control = True
             #     self.allowed_to_replan = True

@@ -330,7 +330,7 @@ class Drawing(Node):
         self.get_logger().info(f"request.pose: {request.pose}")
 
         self.cartesian_mp_queue.insert(0, request.pose)
-        self.cartesian_velocity.insert(0, 0.0015)
+        self.cartesian_velocity.insert(0, 0.015)
 
         await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
 
@@ -465,7 +465,7 @@ class Drawing(Node):
 
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
             self.joint_trajectories = ExecuteJointTrajectories.Request()
-            self.joint_trajectories.poses = self.moveit_mp_queue
+            self.joint_trajectories.current_pose = self.moveit_mp_queue[0]
             self.joint_trajectories.use_force_control = self.use_force_control
 
             self.path_planner.plan_path()
@@ -489,11 +489,15 @@ class Drawing(Node):
             # queue the remaining poses, so that if force threshold is exceeded,
             # send_trajectories can initiate a replan request directly with the
             # april tags node... trust me.
-            self.joint_trajectories.pose = self.cartesian_mp_queue[0]
+
+            self.joint_trajectories.current_pose = self.cartesian_mp_queue[0]
             self.joint_trajectories.replan = self.replan
             self.joint_trajectories.use_force_control = self.use_force_control
             self.get_logger().info(
                 f"cartesian queue: {self.cartesian_mp_queue}")
+
+            if len(self.cartesian_mp_queue) == 1:
+                self.replan = False
 
             self.cartesian_mp_queue.pop(0)
             self.cartesian_velocity.pop(0)
