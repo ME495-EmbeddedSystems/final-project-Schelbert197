@@ -70,15 +70,17 @@ class Kickstart(Node):
         await self.cal_client.call_async(request=Empty.Request())
 
         # DASHES
-        dash_x = [0.01, 0.1, 0.15, 0.19]
-        dash_y = [0.0, 0.0, 0.0, 0.0]
-        dash_on = [True, True, True, False]
+        # [0.01, 0.1, 0.15, 0.19]
+        dash_x = [0.01, 0.03, 0.08, 0.14, 0.19, 0.19]
+        dash_y = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [0.0, 0.0, 0.0, 0.0]
+        # [True, True, True, False]
+        dash_on = [True, True, True, True, True, False]
 
         # WRONG DASHES
         # 1st wrong dash info
         request = BoardTiles.Request()
         request.mode = 0
-        request.position = 1
+        request.position = 2
         request.x = dash_x
         request.y = dash_y
         request.onboard = dash_on
@@ -95,19 +97,42 @@ class Kickstart(Node):
         # move robot to first pose in front of dash origin - moveit_mp
         # request2 = MovePose.Request()
 
+        # initial y position of the board
+        default_y = -0.55
+        default_z = 0.34
+
+        # pose2 = Pose()
+        # pose2.position = Point(x=0.0, y=-0.55, z=)
+        # pose2.orientation = Quaternion(
+        #     x=0.6915744353067583, y=-0.721024315749327, z=-0.010891706465215697, w=0.04159455804102933)
+
+        # pose_list = []
+        # for i, _ in enumerate(dash_x):
+        #     pose = Pose()
+        #     pose.position = Point(x=dash_x[i], y=default_y, z=default_z)
+        #     pose.orientation = Quaternion(
+        #         x=0.6915744353067583, y=-0.721024315749327, z=-0.010891706465215697, w=0.04159455804102933)
+        #     pose_list.append(pose)
+
         request2 = Cartesian.Request()
         request2.poses = [pose1]
+        request2.velocity = 0.1
+        request2.replan = False
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"one done")
 
         request2 = Cartesian.Request()
         request2.poses = [pose_list[0]]
+        request2.velocity = 0.015
+        request2.replan = False
         await self.cartesian_client.call_async(request2)
         self.get_logger().info(f"second done")
         # draw remaining pose dashes with Cartesian mp
         request3 = Cartesian.Request()
-        request3.poses = pose_list
-        self.get_logger().info(f"pose_list: {pose_list}")
+        request3.poses = pose_list[1:]
+        request3.velocity = 0.015
+        request3.replan = True
+        self.get_logger().info(f"pose_list: {pose_list[1:]}")
         await self.cartesian_client.call_async(request3)
         self.get_logger().info(f"all done")
 

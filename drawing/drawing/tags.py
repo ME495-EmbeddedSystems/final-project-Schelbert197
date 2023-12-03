@@ -281,7 +281,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.033 if request.onboard[i] else 0.17
+            z = 0.00 if request.onboard[i] else 0.17
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
@@ -310,32 +310,42 @@ class Tags(Node):
         return response
 
     def update_trajectory_callback(self, request, response):
-        ansT, ansR = self.get_transform("board", "panda_hand_tcp")
-        z = ansT[2]
-        self.get_logger().info("reached update trajcetory callback")
-        pose_list = []
-        for pose in request.input_poses:
-            Trans_arr = [pose.position.x, pose.position.y, pose.position.z]
-            Rot_arr = [pose.orientation.x, pose.orientation.y,
-                       pose.orientation.z, pose.orientation.w]
-            Tra = self.array_to_transform_matrix(Trans_arr, Rot_arr)
-            Trb = self.boardT
-            Tba = mr.TransInv(Trb)@Tra
-            update = np.array([[1, 0, 0, 0],
-                               [0, 1, 0, 0],
-                               [0, 0, 1, z],
-                               [0, 0, 0, 1]])
-            # new_Tba = update@Tba
-            new_Tba = Tba
-            new_Tba[2, 3] = z - 0.002
-            new_Tra = Trb @ new_Tba
-            pos = Pose()
-            position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)
-            pos.position = position
-            pos.orientation = rotation
-            pose_list.append(pos)
 
-        response.output_poses = pose_list
+        ansT, ansR = self.get_transform("board", "panda_hand_tcp")
+
+        # positive z is out of the board
+        if request.into_board:
+            z = ansT[2] - 0.002
+        else:
+            z = ansT[2] - 0.0
+        self.get_logger().info("reached update trajcetory callback")
+
+        pose = request.input_pose
+        self.get_logger().info(f"input pose: {pose}")
+
+        # change the pose
+        Trans_arr = [pose.position.x, pose.position.y, pose.position.z]
+        Rot_arr = [pose.orientation.x, pose.orientation.y,
+                   pose.orientation.z, pose.orientation.w]
+        Tra = self.array_to_transform_matrix(Trans_arr, Rot_arr)
+        Trb = self.boardT
+        Tba = mr.TransInv(Trb)@Tra
+        # update = np.array([[1, 0, 0, 0],
+        #                    [0, 1, 0, 0],
+        #                    [0, 0, 1, z],
+        #                    [0, 0, 0, 1]])
+        # new_Tba = update@Tba
+        new_Tba = Tba
+        new_Tba[2, 3] = z
+        new_Tra = Trb @ new_Tba
+        pos = Pose()
+        position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)
+        pos.position = position
+        pos.orientation = rotation
+
+        self.get_logger().info(f"output pose: {pos}")
+
+        response.output_pose = pos
 
         self.get_logger().info("exiting update trajectory callback")
 
