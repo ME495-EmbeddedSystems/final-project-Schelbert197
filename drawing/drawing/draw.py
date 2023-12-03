@@ -17,7 +17,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories, Replan
+from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories, Replan, Box
 from brain_interfaces.msg import EEForce
 
 import numpy as np
@@ -97,6 +97,7 @@ class Drawing(Node):
         self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_joint_trajectories_callback_group = MutuallyExclusiveCallbackGroup()
+        self.board_service_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
             0.01, self.timer_callback, callback_group=self.timer_callback_group)
 
@@ -122,6 +123,11 @@ class Drawing(Node):
 
         self.replan_service = self.create_service(
             Replan, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
+        
+        
+        #service to make 
+        self.create_box_service = self.create_service(
+            Box, '/make_board', self.board_callback, callback_group=self.board_service_callback_group)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
@@ -387,6 +393,16 @@ class Drawing(Node):
 
         self.state = State.WAITING
 
+        return response
+    
+    def board_callback(self,request, response):
+        box_id = 'board'
+        frame_id = 'panda_link0'
+        dimensions = request.size # size
+        pose = request.pose  # position
+
+        # Add the box to the planning scene using the add_box method
+        self.path_planner.add_box(box_id, frame_id, dimensions, pose)
         return response
 
     def get_transform(self, parent_frame, child_frame):

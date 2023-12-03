@@ -25,11 +25,13 @@ from moveit_msgs.msg import (JointConstraint, Constraints, OrientationConstraint
                              CollisionObject)
 from moveit_msgs.srv import GetPositionIK, GetPositionFK, GetCartesianPath
 
-from geometry_msgs.msg import Vector3, Quaternion
+from geometry_msgs.msg import Vector3, Quaternion, Pose
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 
 from franka_msgs.action import Homing, Grasp
+from moveit_msgs.msg import CollisionObject
+from shape_msgs.msg import SolidPrimitive
 
 
 class Path_Plan_Execute():
@@ -487,3 +489,34 @@ class Path_Plan_Execute():
 
         """
         self.goal_orientation = orientation
+
+    
+    def add_box(self, box_id, frame_id, dimensions, pose):
+        """
+        Add a collision box to the rviz scene.
+
+        Add a box to the rviz scene representing the table that the robot
+        is grabbing objects off of.
+
+        Args:
+        ----
+        box_id (string) : the id of the box
+        frame_id (string) : the id of the box's frame
+        dimensions (list) : the lengths of the edges of the box
+        pose (list) : the cartesian coordinates of the box origin
+
+        """
+        collision_object = CollisionObject()
+        collision_object.header.frame_id = frame_id
+        collision_object.id = box_id
+
+        box_size = SolidPrimitive()
+        box_size.type = SolidPrimitive.BOX
+        box_size.dimensions = dimensions
+
+        box_pose = pose
+
+        collision_object.primitives.append(box_size)
+        collision_object.primitive_poses.append(box_pose)
+
+        self.planning_scene_publisher.publish(collision_object)

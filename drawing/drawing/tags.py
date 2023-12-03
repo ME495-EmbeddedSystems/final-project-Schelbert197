@@ -18,7 +18,7 @@ from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory
+from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory, Box
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -79,6 +79,7 @@ class Tags(Node):
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.move_js_callback_group = MutuallyExclusiveCallbackGroup()
+        self.make_board_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer_callback_grp = MutuallyExclusiveCallbackGroup()
         self.calibrate_callback_grp = MutuallyExclusiveCallbackGroup()
 
@@ -105,6 +106,8 @@ class Tags(Node):
         # create client
         self.move_js_client = self.create_client(
             MovePose, 'moveit_mp', callback_group=self.move_js_callback_group)
+        self.make_board_client = self.create_client(
+            MovePose, '/make_board', callback_group=self.move_js_callback_group)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -133,6 +136,10 @@ class Tags(Node):
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
                 'Move Joint State service not available, waiting again...')
+            
+        while not self.make_board_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info(
+                'Make Board service not available, waiting again...')
 
     # def goal_reach_sub_callback(self, msg):
     #     if msg == "done":
@@ -258,8 +265,20 @@ class Tags(Node):
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
         self.robot_board.transform.rotation = rotation
+        
+        # pos, rotation = self.matrix_to_position_quaternion(Trb2)
+        self.get_logger().info(f'Trt: \n{Trt1}')
+        self.get_logger().info(f'Trb: \n{Trb}')
+        board_pose = Pose(position= pos, orientation= rotation)
+        board_request = Box.Request()
+        board_request.pose = board_pose
+        board_request.size = [1.0,2.0,3.0]
+        await self.make_board_client.call_async(board_request)
+        # self.robot_board_write.transform.translation = pos
+        # self.robot_board_write.transform.rotation = rotation
+        
+        
         # self.state = State.OTHER
-        self.goal_state = "not"
         self.get_logger().info(f'Trb: {pos,rotation}')
 
         self.get_logger().info("calibrate")
@@ -321,6 +340,9 @@ class Tags(Node):
             pos = Pose()
             pos.position = position
             pos.orientation = rotation
+            
+            
+            
             self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
                 Tra)
             self.get_logger().info(f'pose is: {pos}')
