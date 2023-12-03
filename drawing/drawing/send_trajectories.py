@@ -136,6 +136,12 @@ class Executor(Node):
         self.pose = request.current_pose
         self.replan = request.replan
         self.use_force_control = request.use_force_control
+        self.get_logger().info(f"use force control: {self.use_force_control}")
+        self.get_logger().info(f"replan: {self.replan}")
+
+        # if not self.use_force_control:
+        #     self.replan = False
+
         # self.get_logger().info(f"initial poses: {self.pose}")
 
         # if self.replan:
@@ -177,7 +183,7 @@ class Executor(Node):
                 self.joint_trajectories.clear()
                 # self.future.set_result("done")
 
-                # self.upper_threshold = 7.0
+                # self.upper_threshold = 5.0
                 # self.lower_threshold = 1.0
 
                 # replan the trajectory!!
@@ -193,14 +199,15 @@ class Executor(Node):
 
                 self.joint_trajectories = replan_response.joint_trajectories
 
-                self.use_force_control = False
+                self.upper_threshold += 3  # essentially turning force control off, for now
+                self.lower_threshold = 1.0
 
             else:
 
                 self.get_logger().info("joint trajectories cleared")
                 self.get_logger().info("poses all done")
                 self.joint_trajectories.clear()
-                self.upper_threshold = 7.0  # this might need to be changed
+                self.upper_threshold = 5.0  # this might need to be changed
                 self.lower_threshold = 1.0
 
         elif self.ee_force < self.lower_threshold and self.use_force_control and self.joint_trajectories:
@@ -208,6 +215,7 @@ class Executor(Node):
                 f"lower_threshold: {self.lower_threshold}")
             self.get_logger().info(
                 f"LOWER FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
+            # self.get_logger().info(f"joint trajectories: {self.joint_trajectories}")
             # clear the current trajectories first, as we don't want to execute them anymore
 
             if self.replan:
@@ -227,14 +235,16 @@ class Executor(Node):
 
                 self.joint_trajectories = replan_response.joint_trajectories
 
-                self.use_force_control = False
+                self.upper_threshold = 5  # essentially turning force control off, for now
+                self.lower_threshold -= 3
 
             else:
-                self.get_logger().info("joint trajectories cleared")
-                self.get_logger().info("poses all done")
-                self.joint_trajectories.clear()
-                self.upper_threshold = 7.0  # this might need to be changed
-                self.lower_threshold = 1.0
+                self.lower_threshold = -1.5
+            #     self.get_logger().info("joint trajectories cleared")
+            #     self.get_logger().info("poses all done")
+            #     self.joint_trajectories.clear()
+            #     self.upper_threshold = 5.0  # this might need to be changed
+            #     self.lower_threshold = 1.0
 
         # if list of waypoints is not empty, publish to the topic that executes
         # trajectories oof the panda
@@ -253,8 +263,9 @@ class Executor(Node):
             self.execute_trajectory_status_pub.publish(msg)
 
             # turn force control back on after we've published one trajectory
-            if self.i % 250 == 0:
-                self.use_force_control = True
+            # if self.i % 300 == 0 and self.replan:
+            #     self.upper_threshold = 5.0
+            #     self.lower_threshold = 1.0
             # if self.ee_force > self.lower_threshold and self.ee_force < self.upper_threshold:
             #     self.use_force_control = True
             #     self.allowed_to_replan = True

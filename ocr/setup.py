@@ -22,7 +22,10 @@ setup(
     entry_points={
         'console_scripts': [
             "ocr = ocr.ocr:main",
-            "hangman = ocr.hangman:main"
+            "hangman = ocr.hangman:main",
+            "image_modification = ocr.image_modification:main",
+            "paddle_ocr = ocr.paddle_ocr:main",
+            "tesseract_ocr = ocr.tesseract_ocr:main"
         ],
     },
 )

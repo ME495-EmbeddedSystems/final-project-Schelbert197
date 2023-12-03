@@ -18,7 +18,7 @@ from tf2_ros import TransformBroadcaster
 from std_msgs.msg import String
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 # from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory
+from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory, Box
 from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
 from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -59,8 +59,8 @@ class Grid:
             if position == 4:
                 point = (3, 1)
 
-        point_x = (point[0])*self.cell_size + self.xrange[0]
-        point_y = (point[1])*self.cell_size + self.yrange[0]
+        point_y = (point[0])*self.cell_size + self.yrange[0]
+        point_x = (point[1])*self.cell_size + self.xrange[0]
         return [point_x, point_y]
 
 
@@ -79,6 +79,7 @@ class Tags(Node):
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.move_js_callback_group = MutuallyExclusiveCallbackGroup()
+        self.make_board_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer_callback_grp = MutuallyExclusiveCallbackGroup()
         self.calibrate_callback_grp = MutuallyExclusiveCallbackGroup()
 
@@ -105,6 +106,8 @@ class Tags(Node):
         # create client
         self.move_js_client = self.create_client(
             MovePose, 'moveit_mp', callback_group=self.move_js_callback_group)
+        self.make_board_client = self.create_client(
+            Box, '/make_board', callback_group=self.make_board_callback_group)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -134,6 +137,10 @@ class Tags(Node):
             self.get_logger().info(
                 'Move Joint State service not available, waiting again...')
 
+        while not self.make_board_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info(
+                'Make Board service not available, waiting again...')
+
     # def goal_reach_sub_callback(self, msg):
     #     if msg == "done":
     #         self.future_satate.set_result("done")
@@ -150,6 +157,10 @@ class Tags(Node):
             x=0.03524146, y=-0.015, z=-0.043029)
         self.robot_to_camera.transform.rotation = Quaternion(
             x=7.07106765e-01, y=1.44018704e-04, z=7.07106768e-01, w=-1.44018703e-04)
+
+        # self.robot_to_camera.transform.translation = Vector3(x=0.011807788327606367, y=-0.2697480532095115, z=0.03157999806748111)
+        # self.robot_to_camera.transform.rotation = Quaternion(x=-0.10948317052954765, y=-0.28408415419824595, z=0.2376708393954742, w=0.9224002389447412)
+
         # self.get_logger().info(type(self))
         self.tf_static_broadcaster.sendTransform(self.robot_to_camera)
 
@@ -189,6 +200,18 @@ class Tags(Node):
 
         return transform_matrix
 
+    def mean_transformation_matrices(self, matrices):
+        # Convert transformation matrices to exponential coordinates
+        exp_coords = [mr.se3ToVec(mr.MatrixLog6(matrix))
+                      for matrix in matrices]
+        print(exp_coords)
+        # Calculate the mean of exponential coordinates
+        mean_exp_coord = np.mean(exp_coords, axis=0)
+
+        # Convert the mean exponential coordinate back to a transformation matrix
+        mean_matrix = mr.MatrixExp6(mr.VecTose3(mean_exp_coord))
+        return mean_matrix
+
     async def calibrate_callback(self, request, response):
         self.state = State.CALIBRATE
         # ([], [])
@@ -200,6 +223,7 @@ class Tags(Node):
             x=0.30744234834406486, y=-0.17674628233240325, z=0.5725350884705022)
         goal_js.target_pose.orientation = Quaternion(
             x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504)
+        goal_js.use_force_control = False
         ##################### moving to the position####################
         self.get_logger().info('before moved')
         ans = await self.move_js_client.call_async(goal_js)
@@ -210,28 +234,54 @@ class Tags(Node):
         # 3when its done start doing calibrate sequence
 
         ansT, ansR = await self.future
-        while ansT[0] == 0.0:
+        ansT1, ansT2 = ansT
+        ansR1, ansR2 = ansR
+        while ansT1[0] == 0.0 or ansT2[0] == 0.0:
             ansT, ansR = await self.future
+            ansT1, ansT2 = ansT
+            ansR1, ansR2 = ansR
             # self.get_logger().info(f"{ansT, ansR}")
-            # self.get_logger().info('value set in service')
+            self.get_logger().info('value set in service')
         # if ansT[0] != 0.0:
-        Ttb = np.array([[1, 0, 0, 0.05],
+        Tt1b = np.array([[1, 0, 0, 0.05],
                         [0, 1, 0, 0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
+        Tt2b = np.array([[1, 0, 0, 0.05],
+                        [0, 1, 0, -0.05],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
         # Ttb = np.array([0.063,0.063,0,1])
-        Trt = self.array_to_transform_matrix(ansT, ansR)
+        Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
+        Trt2 = self.array_to_transform_matrix(ansT2, ansR2)
+        Trb1 = Trt1 @ Tt1b
+        Trb2 = Trt2 @ Tt2b
+        Trb = self.mean_transformation_matrices([Trb1, Trb2])
 
-        Trb = Trt @ Ttb
-        self.boardT = Trt
+        self.boardT = Trb1
         self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(Trb)
-        self.get_logger().info(f'Trt: \n{Trt}')
+        pos, rotation = self.matrix_to_position_quaternion(self.boardT)
+        self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
         self.robot_board.transform.rotation = rotation
-        # self.state = State.OTHER
-        self.goal_state = "not"
+
+        # pos, rotation = self.matrix_to_position_quaternion(Trb2)
+        self.get_logger().info(f'Trt: \n{Trt1}')
+        self.get_logger().info(f'Trb: \n{Trb}')
+        p, r = self.matrix_to_position_quaternion(self.boardT, 1)
+        board_pose = Pose()
+        board_pose.position = p
+        board_pose.orientation = r
+
+        board_request = Box.Request()
+        board_request.pose = board_pose
+        board_request.size = [2.6, 2.2, 0.04]
+        await self.make_board_client.call_async(board_request)
+        # self.robot_board_write.transform.translation = pos
+        # self.robot_board_write.transform.rotation = rotation
+
+        self.state = State.OTHER
         self.get_logger().info(f'Trb: {pos,rotation}')
 
         self.get_logger().info("calibrate")
@@ -293,6 +343,7 @@ class Tags(Node):
             pos = Pose()
             pos.position = position
             pos.orientation = rotation
+
             self.robot_board_write.transform.translation, self.robot_board_write.transform.rotation = self.matrix_to_position_quaternion(
                 Tra)
             self.get_logger().info(f'pose is: {pos}')
@@ -301,6 +352,7 @@ class Tags(Node):
 
         self.get_logger().info("where_to_write3")
         response.pose_list = response_a
+        response.use_force_control = request.onboard
         # self.get_logger().info(f'{response.pose_list}')
         return response
 
@@ -310,9 +362,9 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] - 0.002
+            z = ansT[2] - 0.004
         else:
-            z = ansT[2] - 0.0
+            z = ansT[2] + 0.004
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
@@ -426,16 +478,17 @@ class Tags(Node):
 
     async def timer_callback(self):
         msg = String()
-        # ans1T, ans1R = self.get_transform('panda_link6', 'panda_hand')
-        # self.get_logger().info(f'hand: {self.array_to_transform_matrix(ans1T, ans1R)}')
+        # ans1T, ans1R = self.get_transform('camera_link', 'tag56')
+        # self.get_logger().info(f'hand: {ans1T[0]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":
 
             self.get_logger().info('function done')
-            ansT, ansR = self.get_transform('panda_link0', 'tag11')
+            ansT1, ansR1 = self.get_transform('panda_link0', 'tag11')
+            ansT2, ansR2 = self.get_transform('panda_link0', 'tag12')
             # self.get_logger().info(f'{ansT, ansR}')
-            self.future.set_result([ansT, ansR])
+            self.future.set_result([[ansT1, ansT2], [ansR1, ansR2]])
 
         # ansTi, ansRi = self.get_transform('board', 'panda_hand_tcp')
         # pls = self.array_to_transform_matrix(ansTi, ansRi)

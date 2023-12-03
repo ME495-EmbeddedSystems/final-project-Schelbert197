@@ -17,7 +17,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories, Replan
+from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories, Replan, Box
 from brain_interfaces.msg import EEForce
 
 import numpy as np
@@ -97,6 +97,7 @@ class Drawing(Node):
         self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
         self.execute_joint_trajectories_callback_group = MutuallyExclusiveCallbackGroup()
+        self.board_service_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
             0.01, self.timer_callback, callback_group=self.timer_callback_group)
 
@@ -122,6 +123,11 @@ class Drawing(Node):
 
         self.replan_service = self.create_service(
             Replan, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
+        
+        
+        #service to make 
+        self.create_box_service = self.create_service(
+            Box, '/make_board', self.board_callback, callback_group=self.board_service_callback_group)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
@@ -174,9 +180,9 @@ class Drawing(Node):
         self.force_threshold = 3.0  # N
         self.calibration_counter = 0.0  # N
         self.ee_force = 0.0  # N
-        self.use_force_control = False
 
         self.cartesian_velocity = []
+        self.use_force_control = []
         self.replan = False
 
         self.joint_trajectories = ExecuteJointTrajectories.Request()
@@ -276,13 +282,16 @@ class Drawing(Node):
 
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
-        self.use_force_control = False
+        self.use_force_control.append(request.use_force_control)
+        self.replan = False
 
         await self.plan_future
         self.get_logger().info("MOVEIT MOTION PLAN REQUEST COMPLETE")
 
         self.plan_future = Future()
         self.execute_future = Future()
+
+
 
         return response
 
@@ -315,7 +324,7 @@ class Drawing(Node):
             self.cartesian_velocity.append(request.velocity)
 
         self.state = State.PLAN_CARTESIAN_MOVE
-        self.use_force_control = True
+        self.use_force_control = request.use_force_control
 
         await self.plan_future
 
@@ -384,6 +393,16 @@ class Drawing(Node):
 
         self.state = State.WAITING
 
+        return response
+    
+    def board_callback(self,request, response):
+        box_id = 'board'
+        frame_id = 'panda_link0'
+        dimensions = request.size # size
+        pose = request.pose  # position
+
+        # Add the box to the planning scene using the add_box method
+        self.path_planner.add_box(box_id, frame_id, dimensions, pose)
         return response
 
     def get_transform(self, parent_frame, child_frame):
@@ -466,13 +485,14 @@ class Drawing(Node):
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
             self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.current_pose = self.moveit_mp_queue[0]
-            self.joint_trajectories.use_force_control = self.use_force_control
+            self.joint_trajectories.use_force_control = self.use_force_control[0]
 
             self.path_planner.plan_path()
 
             self.state = State.WAITING
 
             self.moveit_mp_queue.pop(0)
+            self.use_force_control.pop(0)
 
         elif self.state == State.PLAN_CARTESIAN_MOVE:
 
@@ -492,7 +512,7 @@ class Drawing(Node):
 
             self.joint_trajectories.current_pose = self.cartesian_mp_queue[0]
             self.joint_trajectories.replan = self.replan
-            self.joint_trajectories.use_force_control = self.use_force_control
+            self.joint_trajectories.use_force_control = self.use_force_control[0]
             self.get_logger().info(
                 f"cartesian queue: {self.cartesian_mp_queue}")
 
@@ -501,6 +521,7 @@ class Drawing(Node):
 
             self.cartesian_mp_queue.pop(0)
             self.cartesian_velocity.pop(0)
+            self.use_force_control.pop(0)
 
             self.state = State.EXECUTING
 
