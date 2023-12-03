@@ -144,17 +144,16 @@ class Tags(Node):
         self.robot_to_camera = TransformStamped()
         self.robot_to_camera.header.stamp = self.get_clock().now().to_msg()
         self.robot_to_camera.header.frame_id = "panda_hand_tcp"
-        self.robot_to_camera.child_frame_id =  "camera_link"
+        self.robot_to_camera.child_frame_id = "camera_link"
 
         self.robot_to_camera.transform.translation = Vector3(
             x=0.03524146, y=-0.015, z=-0.043029)
         self.robot_to_camera.transform.rotation = Quaternion(
             x=7.07106765e-01, y=1.44018704e-04, z=7.07106768e-01, w=-1.44018703e-04)
-        
-        
+
         # self.robot_to_camera.transform.translation = Vector3(x=0.011807788327606367, y=-0.2697480532095115, z=0.03157999806748111)
         # self.robot_to_camera.transform.rotation = Quaternion(x=-0.10948317052954765, y=-0.28408415419824595, z=0.2376708393954742, w=0.9224002389447412)
-        
+
         # self.get_logger().info(type(self))
         self.tf_static_broadcaster.sendTransform(self.robot_to_camera)
 
@@ -194,9 +193,10 @@ class Tags(Node):
 
         return transform_matrix
 
-    def mean_transformation_matrices(self,matrices):
-    # Convert transformation matrices to exponential coordinates
-        exp_coords = [mr.se3ToVec(mr.MatrixLog6(matrix)) for matrix in matrices]
+    def mean_transformation_matrices(self, matrices):
+        # Convert transformation matrices to exponential coordinates
+        exp_coords = [mr.se3ToVec(mr.MatrixLog6(matrix))
+                      for matrix in matrices]
         print(exp_coords)
         # Calculate the mean of exponential coordinates
         mean_exp_coord = np.mean(exp_coords, axis=0)
@@ -204,8 +204,7 @@ class Tags(Node):
         # Convert the mean exponential coordinate back to a transformation matrix
         mean_matrix = mr.MatrixExp6(mr.VecTose3(mean_exp_coord))
         return mean_matrix
-    
-    
+
     async def calibrate_callback(self, request, response):
         self.state = State.CALIBRATE
         # ([], [])
@@ -251,7 +250,7 @@ class Tags(Node):
         Trb1 = Trt1 @ Tt1b
         Trb2 = Trt2 @ Tt2b
         Trb = self.mean_transformation_matrices([Trb1, Trb2])
-        
+
         self.boardT = Trb1
         self.get_logger().info(f'Trb: \n{Trb}')
         pos, rotation = self.matrix_to_position_quaternion(Trb1)
@@ -301,12 +300,11 @@ class Tags(Node):
             Tra)
 
         response.initial_pose = pos
-        
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.00 if request.onboard[i] else 0.1
+            z = 0.00 if request.onboard[i] else 0.17
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
@@ -341,9 +339,9 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] - 0.003
+            z = ansT[2] - 0.004
         else:
-            z = ansT[2] + 0.0015
+            z = ansT[2] + 0.004
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
@@ -467,7 +465,7 @@ class Tags(Node):
             ansT1, ansR1 = self.get_transform('panda_link0', 'tag11')
             ansT2, ansR2 = self.get_transform('panda_link0', 'tag12')
             # self.get_logger().info(f'{ansT, ansR}')
-            self.future.set_result([[ansT1,ansT2], [ansR1, ansR2]])
+            self.future.set_result([[ansT1, ansT2], [ansR1, ansR2]])
 
         # ansTi, ansRi = self.get_transform('board', 'panda_hand_tcp')
         # pls = self.array_to_transform_matrix(ansTi, ansRi)
