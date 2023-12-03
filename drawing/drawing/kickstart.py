@@ -72,21 +72,26 @@ class Kickstart(Node):
 
         # DASHES
         # draw dashes for word to guess 
-        await self.draw_component(1,0)
+        await self.draw_component(3,0)
         self.get_logger().info('drew first dash')
-        await self.draw_component(1,1)
-        await self.draw_component(1,2)
-        await self.draw_component(1,3)
-        await self.draw_component(1,4)
-        await self.draw_component(1,5)
+        # await self.draw_component(1,1)
+        # await self.draw_component(1,2)
+        # await self.draw_component(1,3)
+        # await self.draw_component(1,4)
+        # await self.draw_component(1,5)
+        
+        # # draw dashes for wrong letters
+        # await self.draw_component(0,0)
+        # await self.draw_component(0,1)
+        # await self.draw_component(0,2)
+        # await self.draw_component(0,3)
+        # await self.draw_component(0,4)
+        
+        # # draw stand for hangman
+        # await self.draw_component(3,0)
+        
 
-        # draw dashes for wrong letters
-        # self.draw_component(0,0)
-        # self.draw_component(0,1)
-        # self.draw_component(0,2)
-        # self.draw_component(0,3)
-        # self.draw_component(0,4)
-        await self.cal_client.call_async(request=Empty.Request())
+        
         
 
         return response
@@ -99,9 +104,9 @@ class Kickstart(Node):
         dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0]
-        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.45]
-        stand_on = [True, True, True, True, True, True, True, True, True, True, False]
+        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0,0.01,0.09,0.0,0.0,0.0]
+        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.0,0.0,-0.01,-0.05,-0.05]
+        stand_on = [True, True, True, True, True, True, True, True, True,True,True,True,True,True,False]
 
         
 
@@ -166,6 +171,7 @@ class Kickstart(Node):
             request2.poses = [pose1]
             request2.velocity = 0.1
             request2.replan = False
+            request2.use_force_control = [False]
             await self.cartesian_client.call_async(request2)
             self.get_logger().info(f"working on it")
 
@@ -173,6 +179,7 @@ class Kickstart(Node):
             request2.poses = [pose_list[0]]
             request2.velocity = 0.015
             request2.replan = False
+            request2.use_force_control = [stand_on[0]]
             await self.cartesian_client.call_async(request2)
             self.get_logger().info(f"still working on it")
             # draw remaining pose dashes with Cartesian mp
@@ -180,6 +187,7 @@ class Kickstart(Node):
             request3.poses = pose_list[1:]
             request3.velocity = 0.015
             request3.replan = True
+            request3.use_force_control = stand_on[1:]
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
             await self.cartesian_client.call_async(request3)
             self.get_logger().info(f"all done")
