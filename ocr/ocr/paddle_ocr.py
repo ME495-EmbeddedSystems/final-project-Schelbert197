@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from enum import Enum, auto
 
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
@@ -11,6 +12,11 @@ from paddleocr import PaddleOCR
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
+from std_msgs.msg import Bool
+
+class State(Enum):
+    START = (auto(),)  # start ocr
+    STOPPED = (auto(),)  # stop ocr
 
 class Paddle_Ocr(Node):
     def __init__(self):
@@ -21,6 +27,9 @@ class Paddle_Ocr(Node):
 
         # initialize CvBridge
         self.cv_bridge = CvBridge()
+
+        # create subscriber to set state
+        self.game_state = self.create_subscription(Bool, "/ocr_run", self.game_state_callback, qos_profile=10)
 
         # create subscriber to get image
         self.cap_1 = self.create_subscription(Image, "modified_image_1", self.image_reader_1, qos_profile=10)
@@ -55,10 +64,20 @@ class Paddle_Ocr(Node):
         self.guess_tracker = [] # queue verified word guesses
         self.guess_pub_tracker = [] # track published guesses
 
+        # define instance attributes
+        self.state = State.STOPPED
+
+    def game_state_callback(self, msg):
+        if msg.data:
+            self.state = State.START
+        else:
+            self.state = State.STOPPED
+
     def ocr_timer(self):
         """Call the ocr function"""
-        self.ocr_func_letter(self.frame_1)
-        self.ocr_func_word(self.frame_2)
+        if self.state == State.START:
+            self.ocr_func_letter(self.frame_1)
+            self.ocr_func_word(self.frame_2)
 
     def ocr_func_letter(self, frame):
         """Run OCR on the single letter image frame"""
