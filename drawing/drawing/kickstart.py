@@ -68,144 +68,121 @@ class Kickstart(Node):
     async def kickstart_callback(self, request, response):
         # CALIBRATE ONCE
         await self.cal_client.call_async(request=Empty.Request())
-        self.get_logger().info("calibrated")
+        self.get_logger().info('finished calibrating')
+
         # DASHES
-        # [0.01, 0.1, 0.15, 0.19]
-        dash_x = [0.01, 0.03, 0.08,0.08, 0.14, 0.19, 0.19]
-        dash_y = [0.0, 0.0, 0.0, 0.0,0.0, 0.0, 0.0]  # [0.0, 0.0, 0.0, 0.0]
-        # [True, True, True, False]
-        dash_on = [True, True, False, True, True, True, False]
+        # draw dashes for word to guess 
+        await self.draw_component(1,0)
+        self.get_logger().info('drew first dash')
+        await self.draw_component(1,1)
+        await self.draw_component(1,2)
+        await self.draw_component(1,3)
+        await self.draw_component(1,4)
+        await self.draw_component(1,5)
 
-        # WRONG DASHES
-        # 1st wrong dash info
-        request = BoardTiles.Request()
-        request.mode = 0
-        request.position = 2
-        request.x = dash_x
-        request.y = dash_x
-        request.onboard = dash_on
-
-        # denote pose_list and initial_pose from BoardTiles response
-        resp = await self.tile_client.call_async(request)
-        pose1 = resp.initial_pose
-        pose_list = resp.pose_list
-        use_force_control = resp.use_force_control
-
-        self.get_logger().info(f"Pose List for Dash: {pose1}")
-        self.get_logger().info(f"Pose List for Dash: {pose_list}")
-
-        # FIRST TIME MOVING TO BOARD - MOVEIT_MP
-        # move robot to first pose in front of dash origin - moveit_mp
-        # request2 = MovePose.Request()
-
-        # initial y position of the board
-        default_y = -0.55
-        default_z = 0.34
-
-        # pose2 = Pose()
-        # pose2.position = Point(x=0.0, y=-0.55, z=)
-        # pose2.orientation = Quaternion(
-        #     x=0.6915744353067583, y=-0.721024315749327, z=-0.010891706465215697, w=0.04159455804102933)
-
-        # pose_list = []
-        # for i, _ in enumerate(dash_x):
-        #     pose = Pose()
-        #     pose.position = Point(x=dash_x[i], y=default_y, z=default_z)
-        #     pose.orientation = Quaternion(
-        #         x=0.6915744353067583, y=-0.721024315749327, z=-0.010891706465215697, w=0.04159455804102933)
-        #     pose_list.append(pose)
-
-        request2 = Cartesian.Request()
-        request2.poses = [pose1]
-        request2.velocity = 0.1
-        request2.replan = False
-        request2.use_force_control = [False]
+        # draw dashes for wrong letters
+        # self.draw_component(0,0)
+        # self.draw_component(0,1)
+        # self.draw_component(0,2)
+        # self.draw_component(0,3)
+        # self.draw_component(0,4)
+        await self.cal_client.call_async(request=Empty.Request())
         
-        await self.cartesian_client.call_async(request2)
-        self.get_logger().info(f"one done")
-
-        request2 = Cartesian.Request()
-        request2.poses = [pose_list[0]]
-        request2.velocity = 0.015
-        request2.replan = False
-        request2.use_force_control = [dash_on[0]]
-        await self.cartesian_client.call_async(request2)
-        self.get_logger().info(f"second done")
-        # draw remaining pose dashes with Cartesian mp
-        request3 = Cartesian.Request()
-        request3.poses = pose_list[1:]
-        request3.velocity = 0.015
-        request3.replan = True
-        request3.use_force_control = dash_on[1:]
-        self.get_logger().info(f"pose_list: {pose_list[1:]}")
-        await self.cartesian_client.call_async(request3)
-        self.get_logger().info(f"all done")
-       
 
         return response
+    
+    async def draw_component(self,mode,position):
 
-    # async def timer_callback(self):
-    #     # calibrate once -- call Ananya's stuff
-    #     await self.cal_client.call_async(request=Empty.Request())
+        # if mode = 0 or 1 then drawing dashes
+        dash_x = [0.01, 0.09, 0.09]
+        dash_y = [0.0, 0.0, 0.0]
+        dash_on = [True, True, False]
 
-    #     # QUEUE EACH SECTION OF GAME SETUP - INCORRECT LETTERS, CORRECT LETTERS, HANGMAN STAND
+        # if mode = 3 then drawing stand
+        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0]
+        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.45]
+        stand_on = [True, True, True, True, True, True, True, True, True, True, False]
 
-    #     # set up position for each component (list of Mode and positions)
-    #     ############# list for BoardTiles of incorrect letter dashes ##############
-    #     # DASH 1:
-    #     if self.cal_state == "CALIBRATED":
-    #         request = BoardTiles.Request()
-    #         request.mode = 0
-    #         request.position = 0
-    #         request.x = [0.01, 0.05, 0.09, 0.09]
-    #         request.y = [0.0, 0.0, 0.0, 0.0]
-    #         request.onboard = [True, True, True, False]
+        
 
-    #         pose_list = await self.tile_client.call_async(request)
+        if mode == 0 or mode == 1:
+            # take in mode and position and draw component accordingly
+            request = BoardTiles.Request()
+            request.mode = mode
+            request.position = position
+            request.x = dash_x
+            request.y = dash_y
+            request.onboard = dash_on
 
-    #         request = Cartesian.Request()
-    #         request.poses = pose_list.origin_pose
+            # denote pose_list and initial_pose from BoardTiles response
+            resp = await self.tile_client.call_async(request)
+            pose1 = resp.initial_pose
+            pose_list = resp.pose_list
 
-    #         self.get_logger().info(f"pose+list: {pose_list}")
+            self.get_logger().info(f"Pose List for Dash: {pose1}")
+            self.get_logger().info(f"Pose List for Dash: {pose_list}")
+            request2 = Cartesian.Request()
+            request2.poses = [pose1]
+            request2.velocity = 0.1
+            request2.replan = False
+            request2.use_force_control = [False]
+            await self.cartesian_client.call_async(request2)
+            self.get_logger().info(f"one done")
 
-    #         await self.cartesian_client.call_async(request)
+            request2 = Cartesian.Request()
+            request2.poses = [pose_list[0]]
+            request2.velocity = 0.015
+            request2.replan = False
+            request2.use_force_control = [dash_on[0]]
+            await self.cartesian_client.call_async(request2)
+            self.get_logger().info(f"second done")
+            # draw remaining pose dashes with Cartesian mp
+            request3 = Cartesian.Request()
+            request3.poses = pose_list[1:]
+            request3.velocity = 0.015
+            request3.replan = True
+            request3.use_force_control = dash_on[1:]
+            self.get_logger().info(f"pose_list: {pose_list[1:]}")
+            await self.cartesian_client.call_async(request3)
+            self.get_logger().info(f"all done")
+        
+        if mode == 3:
+            # take in mode and position and draw component accordingly
+            request = BoardTiles.Request()
+            request.mode = mode
+            request.position = position
+            request.x = stand_x
+            request.y = stand_y
+            request.onboard = stand_on
 
-        # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
-        # for pose in pose_list.origin_pose:
-        #     self.get_logger().info(f'{pose}')
-        #     request2 = MovePose.Request()
-        #     request2.target_pose = pose
-        #     await self.movemp_client.call_async(request2)
+            # denote pose_list and initial_pose from BoardTiles response
+            resp = await self.tile_client.call_async(request)
+            pose1 = resp.initial_pose
+            pose_list = resp.pose_list
 
-        # DASH 2:
-        # request = BoardTiles()
-        # request.mode = 0
-        # request.position = 1
-        # request.x = [0.01,0.05,0.09,0.09]
-        # request.y = [0.0,0.0,0.0,0.0]
-        # request.onboard = [True,True,True,False]
+            self.get_logger().info(f"Pose List for Stand: {pose1}")
+            self.get_logger().info(f"Pose List for Stand: {pose_list}")
+            request2 = Cartesian.Request()
+            request2.poses = [pose1]
+            request2.velocity = 0.1
+            request2.replan = False
+            await self.cartesian_client.call_async(request2)
+            self.get_logger().info(f"working on it")
 
-        # pose_list = await self.tile_client.call_async(request)
-        # # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
-        # for pose in pose_list:
-        #     await self.movemp_client.call_async(pose)
-
-        # DASH 3:
-        # request = BoardTiles()
-        # request.mode = 0
-        # request.position = 2
-        # request.x = [0.01,0.05,0.09,0.09]
-        # request.y = [0.0,0.0,0.0,0.0]
-        # request.onboard = [True,True,True,False]
-
-        # pose_list = await self.tile_client.call_async(request)
-        # # Use moveit_mp service to convert list of Poses to robot motions - should draw each dash!
-        # for pose in pose_list:
-        #     await self.movemp_client.call_async(pose)
-
-        # convert list of Poses to Gripper pose --> use ananya's functions ## wait for ananya to do this
-
-        # use graham's code to queue each section of components
+            request2 = Cartesian.Request()
+            request2.poses = [pose_list[0]]
+            request2.velocity = 0.015
+            request2.replan = False
+            await self.cartesian_client.call_async(request2)
+            self.get_logger().info(f"still working on it")
+            # draw remaining pose dashes with Cartesian mp
+            request3 = Cartesian.Request()
+            request3.poses = pose_list[1:]
+            request3.velocity = 0.015
+            request3.replan = True
+            self.get_logger().info(f"pose_list: {pose_list[1:]}")
+            await self.cartesian_client.call_async(request3)
+            self.get_logger().info(f"all done")
 
 
 def main(args=None):
