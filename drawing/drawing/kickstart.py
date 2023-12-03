@@ -72,23 +72,23 @@ class Kickstart(Node):
 
         # DASHES
         # draw dashes for word to guess 
-        await self.draw_component(3,0)
+        await self.draw_component(1,0)
         self.get_logger().info('drew first dash')
-        # await self.draw_component(1,1)
-        # await self.draw_component(1,2)
-        # await self.draw_component(1,3)
-        # await self.draw_component(1,4)
-        # await self.draw_component(1,5)
+        await self.draw_component(1,1)
+        await self.draw_component(1,2)
+        await self.draw_component(1,3)
+        await self.draw_component(1,4)
+        await self.draw_component(1,5)
         
         # # draw dashes for wrong letters
-        # await self.draw_component(0,0)
-        # await self.draw_component(0,1)
-        # await self.draw_component(0,2)
-        # await self.draw_component(0,3)
-        # await self.draw_component(0,4)
+        await self.draw_component(0,0)
+        await self.draw_component(0,1)
+        await self.draw_component(0,2)
+        await self.draw_component(0,3)
+        await self.draw_component(0,4)
         
         # # draw stand for hangman
-        # await self.draw_component(3,0)
+        await self.draw_component(3,0)
         
 
         
