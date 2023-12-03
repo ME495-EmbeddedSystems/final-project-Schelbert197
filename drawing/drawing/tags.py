@@ -276,7 +276,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.04 if request.onboard[i] else 0.017
+            z = 0.00 if request.onboard[i] else 0.17
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
@@ -310,12 +310,13 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] - 0.0005
+            z = ansT[2] - 0.002
         else:
-            z = ansT[2] + 0.0005
+            z = ansT[2] - 0.0
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
+        self.get_logger().info(f"input pose: {pose}")
 
         # change the pose
         Trans_arr = [pose.position.x, pose.position.y, pose.position.z]
@@ -337,7 +338,9 @@ class Tags(Node):
         pos.position = position
         pos.orientation = rotation
 
-        response.output_pose = pose
+        self.get_logger().info(f"output pose: {pos}")
+
+        response.output_pose = pos
 
         self.get_logger().info("exiting update trajectory callback")
 
