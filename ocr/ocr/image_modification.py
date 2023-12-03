@@ -14,6 +14,18 @@ def nothing(x):
     """Callback for trackbars"""
     pass
 
+def kernel(x):
+    """Callback for kernel trackbar"""
+    if x % 2 == 0:
+        x = x + 1 # ensure that the value is odd
+    cv2.setTrackbarPos('Kernel', 'Parameters', x)
+
+def kernel_cropped(x):
+    """Callback for kernel_cropped trackbar"""
+    if x % 2 == 0:
+        x = x + 1 # ensure that the value is odd
+    cv2.setTrackbarPos('Kernel_Cropped', 'Parameters', x)
+
 class ImageModification(Node):
     def __init__(self):
         super().__init__("image_modification")
@@ -32,13 +44,28 @@ class ImageModification(Node):
         cv2.namedWindow('Parameters')
         cv2.createTrackbar('Canny_T_min', 'Parameters', 0, 255, nothing)
         cv2.createTrackbar('Canny_T_max', 'Parameters', 0, 255, nothing)
-        cv2.createTrackbar('Bin_Thresh', 'Parameters', 0, 255, nothing)
-        cv2.setTrackbarPos('Canny_T_max', 'Parameters', 255)
+        cv2.createTrackbar('Kernel', 'Parameters', 1, 31, kernel)
+        cv2.createTrackbar('Kernel_Cropped', 'Parameters', 1, 31, kernel_cropped)
+        cv2.createTrackbar('Dilate_Kernel', 'Parameters', 1, 30, nothing)
+
+        # set default trackbar positions
+        cv2.setTrackbarPos('Kernel', 'Parameters', 5)
+        cv2.setTrackbarPos('Kernel_Cropped', 'Parameters', 5)
+        cv2.setTrackbarPos('Dilate_Kernel', 'Parameters', 2)
+        cv2.setTrackbarPos('Canny_T_min', 'Parameters', 50)
+        cv2.setTrackbarPos('Canny_T_max', 'Parameters', 150)
 
     def image_modification(self, msg):
         """Pre-process the image for OCR"""
         # convert image to opencv format
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
+
+        # fetch trackbar positions for tuning
+        c_min = cv2.getTrackbarPos('Canny_T_min', 'Parameters')
+        c_max = cv2.getTrackbarPos('Canny_T_max', 'Parameters')
+        k_size = cv2.getTrackbarPos('Kernel', 'Parameters')
+        k_size_2 = cv2.getTrackbarPos('Kernel_Cropped', 'Parameters')
+        d_k_size = cv2.getTrackbarPos('Dilate_Kernel', 'Parameters')
 
         # resize the image
         resized_image = imutils.resize(self.frame, height=500)
@@ -49,15 +76,12 @@ class ImageModification(Node):
         # cv2.imshow("gray", gray)
 
         # blur image
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        blurred = cv2.GaussianBlur(gray, (k_size, k_size), 0)
         # cv2.imshow("blurred", blurred)
 
-        c_min = cv2.getTrackbarPos('Canny_T_min', 'Parameters')
-        c_max = cv2.getTrackbarPos('Canny_T_max', 'Parameters')
-
         # edge detection
-        edged = cv2.Canny(blurred, 50, 150)
-        cv2.imshow("edged", edged)
+        edged = cv2.Canny(blurred, c_min, c_max)
+        # cv2.imshow("edged", edged)
 
         # find contours in the edge map, then sort them by their
         # size in descending order
@@ -97,7 +121,7 @@ class ImageModification(Node):
             cropped = warped[y1:y2,x1:x2]
 
             # blur the cropped image
-            cropped = cv2.GaussianBlur(cropped, (5, 5), 0)
+            cropped = cv2.GaussianBlur(cropped, (k_size_2, k_size_2), 0)
 
             # inv binarise the blurred image
             bin_thresh = cv2.getTrackbarPos('Bin_Thresh', 'Parameters')
@@ -107,16 +131,19 @@ class ImageModification(Node):
             # cv2.imshow("binarised", binarised)
 
             # dilate the image to widen letter strokes
-            kernel = np.ones((5,5),np.uint8)
+            kernel = np.ones((d_k_size, d_k_size),np.uint8)
             dilation = cv2.dilate(binarised,kernel,iterations = 1)
 
             # invert the inv dilated image
             inverted_image = cv2.bitwise_not(dilation)
-            cv2.imshow("Letter_Recognition", inverted_image)
+            # cv2.imshow("Letter_Recognition", inverted_image)
             
             # invert the inv binarised image
             binary_image = cv2.bitwise_not(binarised)
-            cv2.imshow("Word_Recognition", binary_image)
+            # cv2.imshow("Word_Recognition", binary_image)
+
+            # display modified image
+            cv2.imshow("Recognition", imutils.resize(binary_image, height=200))
 
             # convert images to msg format and publish
             img_publish_1 = self.cv_bridge.cv2_to_imgmsg(binary_image)

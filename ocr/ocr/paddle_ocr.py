@@ -94,7 +94,7 @@ class Paddle_Ocr(Node):
         try:
             # check if the guess is a single letter
             if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 6:
-                if result[0][0][1] > 0.85: # check confidence
+                if result[0][0][1] > 0.75: # check confidence
                     guess = result[0][0][0].upper()
                     self.guess_tracking_word(guess)
                     print(guess)
@@ -107,7 +107,7 @@ class Paddle_Ocr(Node):
         self.alphabet_dict[result[0][0][0].upper()] += result[0][0][1]
         print(self.alphabet_dict[result[0][0][0].upper()])
         # pass the guess to the publisher if value exeeds threshold
-        if self.alphabet_dict[result[0][0][0].upper()] > 2.0:
+        if self.alphabet_dict[result[0][0][0].upper()] > 1.6:
             self.guess_publisher(result[0][0][0].upper())
             # reinitialize alphabet dictionary
             self.alphabet_dict = {letter: 0 for letter in string.ascii_uppercase}
