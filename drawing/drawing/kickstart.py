@@ -68,7 +68,7 @@ class Kickstart(Node):
     async def kickstart_callback(self, request, response):
         # CALIBRATE ONCE
         await self.cal_client.call_async(request=Empty.Request())
-
+        self.get_logger().info("calibrated")
         # DASHES
         # [0.01, 0.1, 0.15, 0.19]
         dash_x = [0.01, 0.03, 0.08,0.08, 0.14, 0.19, 0.19]
