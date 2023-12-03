@@ -28,5 +28,6 @@
   </node>
 
   <node pkg="drawing" exec="executor" name="Execute"/>
+  <node pkg="drawing" exec="tags" name="tags"/>
   
 </launch>

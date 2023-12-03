@@ -121,6 +121,7 @@ class Executor(Node):
 
         # if force is above threshold, stop executing.
         # self.get_logger().info(f"ee_force: {self.ee_force}")
+        # if self.ee_force > self.ee_force_threshold and self.use_force_control and self.joint_trajectories:
         if self.ee_force > self.ee_force_threshold and self.use_force_control and self.joint_trajectories:
             self.get_logger().info(
                 f"FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")

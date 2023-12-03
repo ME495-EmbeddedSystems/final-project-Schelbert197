@@ -144,12 +144,17 @@ class Tags(Node):
         self.robot_to_camera = TransformStamped()
         self.robot_to_camera.header.stamp = self.get_clock().now().to_msg()
         self.robot_to_camera.header.frame_id = "panda_hand_tcp"
-        self.robot_to_camera.child_frame_id = "camera_link"
+        self.robot_to_camera.child_frame_id =  "camera_link"
 
         self.robot_to_camera.transform.translation = Vector3(
             x=0.03524146, y=-0.015, z=-0.043029)
         self.robot_to_camera.transform.rotation = Quaternion(
             x=7.07106765e-01, y=1.44018704e-04, z=7.07106768e-01, w=-1.44018703e-04)
+        
+        
+        # self.robot_to_camera.transform.translation = Vector3(x=0.011807788327606367, y=-0.2697480532095115, z=0.03157999806748111)
+        # self.robot_to_camera.transform.rotation = Quaternion(x=-0.10948317052954765, y=-0.28408415419824595, z=0.2376708393954742, w=0.9224002389447412)
+        
         # self.get_logger().info(type(self))
         self.tf_static_broadcaster.sendTransform(self.robot_to_camera)
 
@@ -276,7 +281,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.04 if request.onboard[i] else 0.017
+            z = 0.033 if request.onboard[i] else 0.17
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
@@ -416,8 +421,8 @@ class Tags(Node):
 
     async def timer_callback(self):
         msg = String()
-        # ans1T, ans1R = self.get_transform('panda_link6', 'panda_hand')
-        # self.get_logger().info(f'hand: {self.array_to_transform_matrix(ans1T, ans1R)}')
+        # ans1T, ans1R = self.get_transform('camera_link', 'tag56')
+        # self.get_logger().info(f'hand: {ans1T[0]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":
