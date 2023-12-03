@@ -171,6 +171,9 @@ class Brain(Node):
         # establishes a global message variable for the duration of the letter state
         self.last_message = msg
 
+        # Turns off the OCR pipeline
+        self.ocr_pub.publish(False)
+
         self.shape_list = []
         for i in range (0,len(self.last_message.positions)):
             tile_origin = BoardTiles()
