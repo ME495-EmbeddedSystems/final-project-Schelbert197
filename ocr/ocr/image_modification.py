@@ -39,7 +39,6 @@ class ImageModification(Node):
         """Pre-process the image for OCR"""
         # convert image to opencv format
         self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
-        cv2.imshow("image", self.frame)
 
         # resize the image
         resized_image = imutils.resize(self.frame, height=500)
@@ -50,14 +49,14 @@ class ImageModification(Node):
         # cv2.imshow("gray", gray)
 
         # blur image
-        blurred = cv2.GaussianBlur(gray, (11, 11), 0)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         # cv2.imshow("blurred", blurred)
 
         c_min = cv2.getTrackbarPos('Canny_T_min', 'Parameters')
         c_max = cv2.getTrackbarPos('Canny_T_max', 'Parameters')
 
         # edge detection
-        edged = cv2.Canny(blurred, 0, 185)
+        edged = cv2.Canny(blurred, 50, 150)
         cv2.imshow("edged", edged)
 
         # find contours in the edge map, then sort them by their
@@ -76,13 +75,17 @@ class ImageModification(Node):
             # if the contour has four vertices identify it as the whiteboard
             if len(approx) == 4:
                 displayCnt = approx
+                cv2.drawContours(resized_image, [displayCnt], 0, (0, 255, 0), 2)
                 break
+
+        # display captured frame with drawn contour
+        cv2.imshow("image", resized_image)
 
         # extract the bounded whiteboard region and apply a perspective transform
         try:
             # apply 4 point transform on the contour in the grayscale image
             warped = four_point_transform(gray, displayCnt.reshape(4, 2))
-            cv2.imshow("warped", warped)
+            # cv2.imshow("warped", warped)
 
             # crop the borders of the image to remove inconsistencies
             height,width = warped.shape
@@ -94,7 +97,7 @@ class ImageModification(Node):
             cropped = warped[y1:y2,x1:x2]
 
             # blur the cropped image
-            cropped = cv2.GaussianBlur(cropped, (9, 9), 0)
+            cropped = cv2.GaussianBlur(cropped, (5, 5), 0)
 
             # inv binarise the blurred image
             bin_thresh = cv2.getTrackbarPos('Bin_Thresh', 'Parameters')
@@ -104,7 +107,7 @@ class ImageModification(Node):
             # cv2.imshow("binarised", binarised)
 
             # dilate the image to widen letter strokes
-            kernel = np.ones((7,7),np.uint8)
+            kernel = np.ones((5,5),np.uint8)
             dilation = cv2.dilate(binarised,kernel,iterations = 1)
 
             # invert the inv dilated image

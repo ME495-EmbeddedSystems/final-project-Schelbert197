@@ -65,15 +65,14 @@ class Paddle_Ocr(Node):
         result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         if result[0] != None:
             self.guess_verification_letter(result)
-        # print(result)
+        print(result)
 
     def ocr_func_word(self, frame):
         """Run OCR on the six-letter word image frame"""
         result = self.paddle_ocr.ocr(frame, cls=False, det=False, rec=True)
         if result[0] != None:
             self.guess_verification_word(result)
-        print(result)
-        pass
+        # print(result)
 
     def guess_verification_letter(self, result):
         """Confirm whether the guess is a single letter"""
