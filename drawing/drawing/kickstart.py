@@ -96,7 +96,7 @@ class Kickstart(Node):
         # if mode = 0 or 1 then drawing dashes
         dash_x = [0.01, 0.09, 0.09]
         dash_y = [0.0, 0.0, 0.0]
-        dash_on = [True, True, True, False]
+        dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
         stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0]
