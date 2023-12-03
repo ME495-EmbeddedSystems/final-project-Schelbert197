@@ -59,8 +59,8 @@ class Grid:
             if position == 4:
                 point = (3, 1)
 
-        point_x = (point[0])*self.cell_size + self.xrange[0]
-        point_y = (point[1])*self.cell_size + self.yrange[0]
+        point_y = (point[0])*self.cell_size + self.yrange[0]
+        point_x = (point[1])*self.cell_size + self.xrange[0]
         return [point_x, point_y]
 
 
@@ -217,6 +217,7 @@ class Tags(Node):
             x=0.30744234834406486, y=-0.17674628233240325, z=0.5725350884705022)
         goal_js.target_pose.orientation = Quaternion(
             x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504)
+        goal_js.use_force_control = False
         ##################### moving to the position####################
         self.get_logger().info('before moved')
         ans = await self.move_js_client.call_async(goal_js)
@@ -251,9 +252,9 @@ class Tags(Node):
         Trb2 = Trt2 @ Tt2b
         Trb = self.mean_transformation_matrices([Trb1, Trb2])
         
-        self.boardT = Trb
+        self.boardT = Trb1
         self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(Trb)
+        pos, rotation = self.matrix_to_position_quaternion(Trb1)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
@@ -305,7 +306,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.02 if request.onboard[i] else 0.17
+            z = 0.00 if request.onboard[i] else 0.1
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],

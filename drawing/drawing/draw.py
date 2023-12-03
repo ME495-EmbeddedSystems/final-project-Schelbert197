@@ -277,12 +277,15 @@ class Drawing(Node):
         self.moveit_mp_queue.append(request.target_pose)
         self.state = State.PLAN_MOVEGROUP
         self.use_force_control.append(request.use_force_control)
+        self.replan = False
 
         await self.plan_future
         self.get_logger().info("MOVEIT MOTION PLAN REQUEST COMPLETE")
 
         self.plan_future = Future()
         self.execute_future = Future()
+
+
 
         return response
 
