@@ -193,6 +193,9 @@ class Brain(Node):
         self.last_message = msg
         self.ocr_pub.publish(False)
 
+        # Turns off the OCR pipeline
+        self.ocr_pub.publish(False)
+
         self.shape_list = []
         for i in range (0,len(self.last_message.positions)):
             tile_origin = BoardTiles.Request()
@@ -216,7 +219,7 @@ class Brain(Node):
             
     async def letter_writer(self, shape: BoardTiles.Request()):
         """Function to process the shape into trajectory service calls"""
-        resp = await self.tile_client.call_async(shape)
+        resp = await self.board_service_client.call_async(shape)
         pose1 = resp.initial_pose
         pose_list = resp.pose_list
 
@@ -227,7 +230,7 @@ class Brain(Node):
         request2.velocity = 0.1
         request2.replan = False
         request2.use_force_control = [False]
-        await self.cartesian_client.call_async(request2)
+        await self.cartesian_mp_service_client.call_async(request2)
         self.get_logger().info(f"one done")
 
         request2 = Cartesian.Request()
@@ -235,7 +238,7 @@ class Brain(Node):
         request2.velocity = 0.015
         request2.replan = False
         request2.use_force_control = [shape.onboard[0]]
-        await self.cartesian_client.call_async(request2)
+        await self.cartesian_mp_service_client.call_async(request2)
         self.get_logger().info(f"second done")
         # draw remaining pose dashes with Cartesian mp
         request3 = Cartesian.Request()
@@ -244,7 +247,7 @@ class Brain(Node):
         request3.replan = True
         request3.use_force_control = shape.onboard[1:]
         self.get_logger().info(f"pose_list: {pose_list[1:]}")
-        await self.cartesian_client.call_async(request3)
+        await self.cartesian_mp_service_client.call_async(request3)
         self.get_logger().info(f"all done")
         
         self.shape_list.pop[0]
