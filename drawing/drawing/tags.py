@@ -46,25 +46,30 @@ class Grid:
 
     def grid_to_world(self, mode, position):
         if mode == 0:
-            point = (1, position+2)
+            point = (0, position+2)
+            
         if mode == 1:
-            point = (4, position+2)
+            point = (2, position+2)
+            
         if mode == 2:
             if position == 0:
-                point = (4, 0)
-            if position == 1:
-                point = (3, 1)
-            if position == 2:
-                point = (3, 0)
-            if position == 3:
-                point = (2, 0)
-            if position == 4:
                 point = (2, 1)
+            if position == 1:
+                point = (1, 1)
+            if position == 2:
+                point = (1, 0)
+            if position == 3:
+                point = (0, 0)
+            if position == 4:
+                point = (0, 1)
         if mode == 3:
-            point = (1, 0)
+            point = (4, 0)
 
         point_y = (point[0])*self.cell_size + self.yrange[0]
         point_x = (point[1])*self.cell_size + self.xrange[0]
+        if mode == 0 or mode == 1:
+            point_y += .2*position
+            point_x += .2*position
         return [point_x, point_y]
 
 
@@ -78,7 +83,7 @@ class Tags(Node):
 
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
-        self.grid = Grid((0, .533), (0, .40), .0667)
+        self.grid = Grid((0, .8), (0, .40), .1)
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
@@ -247,11 +252,11 @@ class Tags(Node):
             # self.get_logger().info(f"{ansT, ansR}")
             self.get_logger().info('value set in service')
         # if ansT[0] != 0.0:
-        Tt1b = np.array([[1, 0, 0, 0.183],
+        Tt1b = np.array([[1, 0, 0, 0.05],
                         [0, 1, 0, 0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
-        Tt2b = np.array([[1, 0, 0, 0.183],
+        Tt2b = np.array([[1, 0, 0, 0.05],
                         [0, 1, 0, -0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
@@ -385,6 +390,7 @@ class Tags(Node):
             z = ansT[2] + 0.003
         else:
             z = ansT[2] - 0.003
+            
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
