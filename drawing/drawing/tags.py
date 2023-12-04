@@ -110,8 +110,6 @@ class Tags(Node):
         # create client
         self.move_js_client = self.create_client(
             MovePose, 'moveit_mp', callback_group=self.move_js_callback_group)
-        self.make_board_client = self.create_client(
-            Box, '/make_board', callback_group=self.make_board_callback_group)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -141,9 +139,9 @@ class Tags(Node):
             self.get_logger().info(
                 'Move Pose service not available, waiting again...')
 
-        while not self.make_board_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info(
-                'Make Board service not available, waiting again...')
+        # while not self.make_board_client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info(
+        #         'Make Board service not available, waiting again...')
 
     # def goal_reach_sub_callback(self, msg):
     #     if msg == "done":
@@ -240,7 +238,7 @@ class Tags(Node):
         ansT, ansR = await self.future
         ansT1, ansT2 = ansT
         ansR1, ansR2 = ansR
-        while ansT1[0] == 0.0:
+        while ansT1[0] == 0.0 and ansT2[0]:
             ansT, ansR = await self.future
             ansT1, ansT2 = ansT
             ansR1, ansR2 = ansR
@@ -263,7 +261,7 @@ class Tags(Node):
         Trb = self.mean_transformation_matrices([Trb1, Trb2])
 
         self.boardT = Trb1
-        self.get_logger().info(f'Trb: \n{Trb}')
+        self.get_logger().info(f'Trb: \n{Trb1}')
         pos, rotation = self.matrix_to_position_quaternion(Trb1)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
@@ -271,33 +269,34 @@ class Tags(Node):
         self.robot_board.transform.rotation = rotation
 
         # pos, rotation = self.matrix_to_position_quaternion(Trb2)
-        self.get_logger().info(f'Trt: \n{Trt1}')
-        self.get_logger().info(f'Trb: \n{Trb}')
+        # self.get_logger().info(f'Trt: \n{Trt1}')
+        # self.get_logger().info(f'Trb: \n{Trb}')
 
-        Tt1b_ = np.array([[1, 0, 0, 0.7],
-                          [0, 1, 0, 0.5],
-                          [0, 0, 1, -0.05],
-                          [0, 0, 0, 1]])
-        Tt2b_ = np.array([[1, 0, 0, 0.7],
-                          [0, 1, 0, 0.4],
-                          [0, 0, 1, -0.05],
-                          [0, 0, 0, 1]])
-        # Ttb = np.array([0.063,0.063,0,1])
-        Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
-        Trt2 = self.array_to_transform_matrix(ansT2, ansR2)
-        Trb1_ = Trt1 @ Tt1b_
-        Trb2_ = Trt2 @ Tt2b_
-        Trb_ = self.mean_transformation_matrices([Trb1_, Trb2_])
+        # Tt1b_ = np.array([[1, 0, 0, 0.7],
+        #                   [0, 1, 0, 0.5],
+        #                   [0, 0, 1, -0.05],
+        #                   [0, 0, 0, 1]])
+        # Tt2b_ = np.array([[1, 0, 0, 0.7],
+        #                   [0, 1, 0, 0.4],
+        #                   [0, 0, 1, -0.05],
+        #                   [0, 0, 0, 1]])
+        # # Ttb = np.array([0.063,0.063,0,1])
+        # Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
+        # Trt2 = self.array_to_transform_matrix(ansT2, ansR2)
+        # Trb1_ = Trt1 @ Tt1b_
+        # Trb2_ = Trt2 @ Tt2b_
+        # Trb_ = self.mean_transformation_matrices([Trb1_, Trb2_])
 
-        p, r = self.matrix_to_position_quaternion(Trb1_, 1)
-        board_pose = Pose()
-        board_pose.position = p
-        board_pose.orientation = r
+        # p, r = self.matrix_to_position_quaternion(Trb_, 1)
+        # board_pose = Pose()
+        # board_pose.position = p
+        # board_pose.orientation = r
 
-        board_request = Box.Request()
-        board_request.pose = board_pose
-        board_request.size = [2.0, 2.2, 0.02]
-        await self.make_board_client.call_async(board_request)
+        # board_request = Box.Request()
+        # board_request.pose = board_pose
+        # board_request.size = [2.0, 2.2, 0.02]
+        # board_request.name = "board"
+        # # await self.make_board_client.call_async(board_request)
         # self.robot_board_write.transform.translation = pos
         # self.robot_board_write.transform.rotation = rotation
 
@@ -326,7 +325,7 @@ class Tags(Node):
         Trl = Trb @ Tbl
 
         x, y = request.x[0], request.y[0]
-        z = 0.1
+        z = 0.12
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],
@@ -382,9 +381,9 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] + 0.003
+            z = ansT[2] + 0.0025
         else:
-            z = ansT[2] - 0.003
+            z = ansT[2] - 0.0025
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
@@ -409,7 +408,7 @@ class Tags(Node):
         position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)
         pos.position = position
         pos.orientation = rotation
-
+        # self.boardT[2][3] = z - 0.004
         self.get_logger().info(f"output pose: {pos}")
 
         response.output_pose = pos

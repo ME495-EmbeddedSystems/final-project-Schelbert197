@@ -2,6 +2,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
+from geometry_msgs.msg import Pose, Point, Quaternion
+
 from std_srvs.srv import Empty
 from std_msgs.msg import String
 
@@ -93,11 +95,10 @@ class Kickstart(Node):
     async def draw_component(self, mode, position):
 
         # if mode = 0 or 1 then drawing dashes
-        dash_x = [0.006, 0.055, 0.055]
+        dash_x = [0.02, 0.055, 0.055]
         dash_y = [0.0, 0.0, 0.0]
         dash_on = [True, True, False]
 
-        # if mode = 3 then drawing stand
         stand_x = [0.0,         0.0,     0.0, 0.0, 0.0, 0.0,
                    0.0, 0.0, 0.0, 0.0, 0.01, 0.06, 0.06, 0.06, 0.06]
         stand_y = [0.00666667, 0.03333333, 0.06666667, 0.1,      0.13333333, 0.16666667, 0.2,
@@ -133,7 +134,7 @@ class Kickstart(Node):
 
             request2 = Cartesian.Request()
             request2.poses = [pose_list[0]]
-            request2.velocity = 0.025
+            request2.velocity = 0.015
             request2.replan = False
             request2.use_force_control = [dash_on[0]]
             await self.cartesian_client.call_async(request2)
@@ -141,7 +142,7 @@ class Kickstart(Node):
             # draw remaining pose dashes with Cartesian mp
             request3 = Cartesian.Request()
             request3.poses = pose_list[1:]
-            request3.velocity = 0.025
+            request3.velocity = 0.015
             request3.replan = True
             request3.use_force_control = dash_on[1:]
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
@@ -188,6 +189,14 @@ class Kickstart(Node):
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
             await self.cartesian_client.call_async(request3)
             self.get_logger().info(f"all done")
+
+            request4 = Cartesian.Request()
+            request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
+                x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
+            request4.velocity = 0.1
+            request4.replan = False
+            request4.use_force_control = [False]
+            await self.cartesian_client.call_async(request4)
 
 
 def main(args=None):

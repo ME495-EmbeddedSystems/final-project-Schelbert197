@@ -63,8 +63,8 @@ class Brain(Node):
             Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)  # create custom service type
         self.kickstart_service_client = self.create_client(
             Empty, '/kickstart_service', callback_group=self.kick_callback_group)
-        self.make_board_client = self.create_client(
-            Box, '/make_board', callback_group=self.make_board_callback_group)
+        # self.make_board_client = self.create_client(
+        #     Box, '/make_board', callback_group=self.make_board_callback_group)
 
         while not self.calibrate_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Calibrate service not available, waiting...')
@@ -263,10 +263,9 @@ class Brain(Node):
         self.shape_list.pop(0)
 
     async def timer_callback(self):
+
         if self.state == State.INITIALIZE:
-            table = Pose()
-            table.position = Point(z=-1.6)
-            await self.make_board_client.call_async(Box.Request(pose=table, size=[1.5, 1.0, 3.0]))
+
             # Initializes the kickstart feature then waits for completion
             await self.kickstart_service_client.call_async(request=Empty.Request())
             # Turns on the OCR because the play has ended and returns to WAITING
@@ -286,7 +285,7 @@ class Brain(Node):
 
         elif self.state == State.CALIBRATE:
             # Starts calibration then moves to waiting
-            await self.calibrate_service_client.call_async(request=Empty.Request())
+            # await self.calibrate_service_client.call_async(request=Empty.Request())
             self.state = State.LETTER
 
         # elif self.state == State.APPROACHING:

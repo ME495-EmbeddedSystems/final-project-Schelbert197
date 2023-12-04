@@ -120,8 +120,8 @@ class Drawing(Node):
             Replan, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
 
         # service to make
-        self.create_box_service = self.create_service(
-            Box, '/make_board', self.board_callback, callback_group=self.board_service_callback_group)
+        # self.create_box_service = self.create_service(
+        #     Box, '/make_board', self.board_callback, callback_group=self.board_service_callback_group)
 
         # this service is for other ROS nodes to send a JointState() msg
         # to this node. This node will plan a path to the combination of
@@ -190,6 +190,9 @@ class Drawing(Node):
         )
 
         self.prev_state = State.STOP
+        table = Pose()
+        table.position = Point(z=-1.6)
+        self.draw_obs(name="table", pos=table, size=[1.5, 1.0, 3.0])
 
     def array_to_transform_matrix(self, translation, quaternion):
         # Normalize the quaternion
@@ -272,6 +275,13 @@ class Drawing(Node):
 
     async def moveit_mp_callback(self, request, response):
 
+        ansT, ansR = self.get_transform("panda_link0", "board")
+        board_pose = Pose()
+        board_pose.position = Point(x=ansT[0], y=ansT[1], z=ansT[2])
+        board_pose.orientation = Quaternion(
+            x=ansR[0], y=ansR[1], z=ansR[2], w=ansR[3])
+        # self.draw_obs(pos=board_pose, name="board", size=[2.0, 2.0, 0.02])
+
         self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
 
         self.plan_future = Future()
@@ -287,6 +297,7 @@ class Drawing(Node):
 
         self.plan_future = Future()
         self.execute_future = Future()
+        # self.draw_obs(pos=board_pose, name="board", size=[0.0, 0.0, -1.0])
 
         return response
 
@@ -390,15 +401,14 @@ class Drawing(Node):
 
         return response
 
-    def board_callback(self, request, response):
-        box_id = 'board'
+    def draw_obs(self, name, pos, size):
+        box_id = name
         frame_id = 'panda_link0'
-        dimensions = request.size  # size
-        pose = request.pose  # position
+        dimensions = size  # size
+        pose = pos  # position
 
         # Add the box to the planning scene using the add_box method
         self.path_planner.add_box(box_id, frame_id, dimensions, pose)
-        return response
 
     def get_transform(self, parent_frame, child_frame):
         """
@@ -473,11 +483,15 @@ class Drawing(Node):
             # then we go to the waiting loop, where we will wait for the future
             # to return true.
 
+            self.get_logger().info("here")
+
             if not self.moveit_mp_queue:  # check if the queue is empty
                 self.state == State.PLAN_CARTESIAN_MOVE
                 return
 
+            self.get_logger().info("here")
             await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
+            self.get_logger().info("here")
             self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.current_pose = self.moveit_mp_queue[0]
             self.joint_trajectories.use_force_control = self.use_force_control[0]
