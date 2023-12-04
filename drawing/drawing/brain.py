@@ -7,7 +7,7 @@ from std_msgs.msg import Bool, String
 from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextToPath
 # from brain_interfaces.msg import Cartesian
-from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
+from brain_interfaces.srv import BoardTiles, MovePose, Cartesian, Box
 from brain_interfaces.msg import LetterMsg
 # from character_interfaces.alphabet import alphabet
 from geometry_msgs.msg import Pose, Point, Quaternion
@@ -50,6 +50,7 @@ class Brain(Node):
         self.mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
         self.kick_callback_group = MutuallyExclusiveCallbackGroup()
+        self.make_board_callback_group = MutuallyExclusiveCallbackGroup()
 
         # Create clients
         self.board_service_client = self.create_client(
@@ -62,6 +63,8 @@ class Brain(Node):
             Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)  # create custom service type
         self.kickstart_service_client = self.create_client(
             Empty, '/kickstart_service', callback_group=self.kick_callback_group)
+        self.make_board_client = self.create_client(
+            Box, '/make_board', callback_group=self.make_board_callback_group)
 
         while not self.calibrate_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Calibrate service not available, waiting...')
@@ -121,22 +124,29 @@ class Brain(Node):
                 self.alphabet.update(point_dict)
             elif letter == '|':  # Body of man
                 xlist = [0.0, 0.0, 0.0]
-                ylist = [0.1 * self.board_scale, 0.05 * self.board_scale, 0.002 * self.board_scale] 
+                ylist = [0.1 * self.board_scale, 0.05 *
+                         self.board_scale, 0.002 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '-':  # Arms of man
-                xlist = [0.05 * self.board_scale, 0.1 * self.board_scale, 0.15 * self.board_scale]
-                ylist = [0.05 * self.board_scale, 0.05 * self.board_scale, 0.05 * self.board_scale]
+                xlist = [0.05 * self.board_scale, 0.1 *
+                         self.board_scale, 0.15 * self.board_scale]
+                ylist = [0.05 * self.board_scale, 0.05 *
+                         self.board_scale, 0.05 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '/':  # Leg of man 1
-                xlist = [0.1 * self.board_scale, 0.075 * self.board_scale, 0.05 * self.board_scale]
-                ylist = [0.1 * self.board_scale, 0.06 * self.board_scale, 0.02 * self.board_scale] 
+                xlist = [0.1 * self.board_scale, 0.075 *
+                         self.board_scale, 0.05 * self.board_scale]
+                ylist = [0.1 * self.board_scale, 0.06 *
+                         self.board_scale, 0.02 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '_':  # Leg of man 2
-                xlist = [0.0 * self.board_scale, 0.025 * self.board_scale, 0.05 * self.board_scale]
-                ylist = [0.1 * self.board_scale, 0.06 * self.board_scale, 0.02 * self.board_scale]
+                xlist = [0.0 * self.board_scale, 0.025 *
+                         self.board_scale, 0.05 * self.board_scale]
+                ylist = [0.1 * self.board_scale, 0.06 *
+                         self.board_scale, 0.02 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             else:  # All letters of alphabet
@@ -146,8 +156,10 @@ class Brain(Node):
                 ylist = []
                 for j in range(0, len(verts) - 1):
                     # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
-                    xlist.append(verts[j][0] * self.scale_factor * self.board_scale)
-                    ylist.append(verts[j][1] * self.scale_factor * self.board_scale)
+                    xlist.append(
+                        verts[j][0] * self.scale_factor * self.board_scale)
+                    ylist.append(
+                        verts[j][1] * self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
 
@@ -224,12 +236,11 @@ class Brain(Node):
 
         self.get_logger().info(f"Pose List for Dash: {pose1}")
         self.get_logger().info(f"Pose List for Dash: {pose_list}")
-        request2 = Cartesian.Request()
-        request2.poses = [pose1]
-        request2.velocity = 0.1
-        request2.replan = False
-        request2.use_force_control = [False]
-        await self.cartesian_mp_service_client.call_async(request2)
+
+        request2 = MovePose.Request()
+        request2.target_pose = pose1
+        request2.use_force_control = False
+        await self.movepose_service_client.call_async(request2)
         self.get_logger().info(f"one done")
 
         request2 = Cartesian.Request()
@@ -253,6 +264,9 @@ class Brain(Node):
 
     async def timer_callback(self):
         if self.state == State.INITIALIZE:
+            table = Pose()
+            table.position = Point(z=-1.6)
+            await self.make_board_client.call_async(Box.Request(pose=table, size=[1.5, 1.0, 3.0]))
             # Initializes the kickstart feature then waits for completion
             await self.kickstart_service_client.call_async(request=Empty.Request())
             # Turns on the OCR because the play has ended and returns to WAITING

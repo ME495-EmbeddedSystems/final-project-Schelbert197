@@ -81,6 +81,7 @@ class Hangman(Node):
                 word_list.append(words[i])
 
         self.word = word_list[randint(0, len(word_list))].upper()
+        self.get_logger().warn(f"Your word is: {self.word}")
 
     def evaulate_guess(self, guess):
         """Evaluates the guess from the user"""

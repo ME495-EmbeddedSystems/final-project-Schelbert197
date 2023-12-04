@@ -6,6 +6,7 @@ from std_srvs.srv import Empty
 from std_msgs.msg import String
 
 from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
+from geometry_msgs.msg import Pose, Point, Quaternion
 
 from enum import Enum, auto
 
@@ -98,15 +99,10 @@ class Kickstart(Node):
         dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                   0.0, 0.0, 0.0, 0.01, 0.06, 0.0, 0.0, 0.0]
-        stand_y = [0.00666667, 0.03333333, 0.06666667, 0.1,      0.13333333, 0.16666667,
-                   0.2,      0.23333333, 0.26666667,  0.3,      0.,      0.,
-                   -0.00666667, -0.03333333, -0.03333333]
         stand_x = [0.0,         0.0,     0.0, 0.0, 0.0, 0.0,
                    0.0, 0.0, 0.0, 0.0, 0.01, 0.06, 0.06, 0.06, 0.06]
         stand_y = [0.00666667, 0.03333333, 0.06666667, 0.1,      0.13333333, 0.16666667, 0.2,
-                   0.23333333, 0.26666667,  0.3,      0.3,      0.3, 0.23333333, 0.2, 0.16666667]
+                   0.23333333, 0.26666667,  0.3,      0.3,      0.3, 0.23333, 0.2, 0.16666667]
         stand_on = [True, True, True, True, True, True, True,
                     True, True, True, True, True, True, True, False]
 
@@ -124,14 +120,14 @@ class Kickstart(Node):
             pose1 = resp.initial_pose
             pose_list = resp.pose_list
 
+            ##################### moving to the position####################
+
             self.get_logger().info(f"Pose List for Dash: {pose1}")
             self.get_logger().info(f"Pose List for Dash: {pose_list}")
-            request2 = Cartesian.Request()
-            request2.poses = [pose1]
-            request2.velocity = 0.1
-            request2.replan = False
-            request2.use_force_control = [False]
-            await self.cartesian_client.call_async(request2)
+            request2 = MovePose.Request()
+            request2.target_pose = pose1
+            request2.use_force_control = False
+            await self.movemp_client.call_async(request2)
             self.get_logger().info(f"one done")
 
             request2 = Cartesian.Request()
