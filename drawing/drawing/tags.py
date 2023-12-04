@@ -289,7 +289,7 @@ class Tags(Node):
         Trb2_ = Trt2 @ Tt2b_
         Trb_ = self.mean_transformation_matrices([Trb1_, Trb2_])
 
-        p, r = self.matrix_to_position_quaternion(Trb_, 1)
+        p, r = self.matrix_to_position_quaternion(Trb1_, 1)
         board_pose = Pose()
         board_pose.position = p
         board_pose.orientation = r
