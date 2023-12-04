@@ -25,7 +25,7 @@ from moveit_msgs.msg import (JointConstraint, Constraints, OrientationConstraint
                              CollisionObject)
 from moveit_msgs.srv import GetPositionIK, GetPositionFK, GetCartesianPath
 
-from geometry_msgs.msg import Vector3, Quaternion, Pose
+from geometry_msgs.msg import Vector3, Quaternion
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 

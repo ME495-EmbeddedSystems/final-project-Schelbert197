@@ -15,8 +15,10 @@ setup(
              'launch/drawing.launch.xml',
              'launch/april_tag.launch.xml',
              'launch/image_proc.launch.py',
+             'launch/ocr_game.launch.xml',
              'config/tag.yaml',
-             'config/view_camera.rviz'
+             'config/view_camera.rviz',
+             'launch/game_time.launch.xml'
          ]
          ),
     ],
@@ -34,9 +36,10 @@ setup(
             "executor = drawing.send_trajectories:main",
             "tags = drawing.tags:Tags_entry",
             "kickstart = drawing.kickstart:main",
-            "test = drawing.test:Test_entry",
-            "ocr = drawing.ocr:main",
-            "hangman = drawing.hangman:main"
+            "paddle_ocr = drawing.paddle_ocr:main",
+            "hangman = drawing.hangman:main",
+            "brain = drawing.brain:main",
+            "image_modification = drawing.image_modification:main"
         ],
     },
 )

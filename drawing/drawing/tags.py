@@ -5,26 +5,28 @@
 """
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
+from tf2_ros import TransformBroadcaster
 import tf2_ros
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+
+from std_msgs.msg import String
 from std_srvs.srv import Empty
+from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
+from geometry_msgs.msg import TransformStamped
+
+from brain_interfaces.srv import BoardTiles, MovePose, UpdateTrajectory, Box
+
+from path_planner.path_plan_execute import Path_Plan_Execute
+
+from enum import Enum, auto
+
+import modern_robotics as mr
 import numpy as np
 import transforms3d as tf
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
-from geometry_msgs.msg import TransformStamped
-from sensor_msgs.msg import JointState
-from tf2_ros import TransformBroadcaster
-from std_msgs.msg import String
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-# from scipy.spatial.transform import Rotation
-from brain_interfaces.srv import BoardTiles, MoveJointState, MovePose, UpdateTrajectory, Box
-from geometry_msgs.msg import Point, Quaternion, Vector3, Pose
-from path_planner.path_plan_execute import Path_Plan_Execute
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-from enum import Enum, auto
-import modern_robotics as mr
-import asyncio
 
 
 class State(Enum):
@@ -76,7 +78,7 @@ class Tags(Node):
 
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
-        self.grid = Grid((0, .80), (0, .60), .10)
+        self.grid = Grid((0, .533), (0, .40), .0667)
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
@@ -137,7 +139,7 @@ class Tags(Node):
         # wait for services
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
-                'Move Joint State service not available, waiting again...')
+                'Move Pose service not available, waiting again...')
 
         while not self.make_board_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
@@ -245,11 +247,11 @@ class Tags(Node):
             # self.get_logger().info(f"{ansT, ansR}")
             self.get_logger().info('value set in service')
         # if ansT[0] != 0.0:
-        Tt1b = np.array([[1, 0, 0, 0.05],
+        Tt1b = np.array([[1, 0, 0, 0.183],
                         [0, 1, 0, 0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
-        Tt2b = np.array([[1, 0, 0, 0.05],
+        Tt2b = np.array([[1, 0, 0, 0.183],
                         [0, 1, 0, -0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
@@ -301,14 +303,14 @@ class Tags(Node):
         # Trb = self.array_to_transform_matrix(ansT, ansR)
         Trb = self.boardT
         lx, ly = self.grid.grid_to_world(request.mode, request.position)
-        Tbl = np.array([[1, 0, 0, lx],
-                        [0, 1, 0, ly],
+        Tbl = np.array([[1, 0, 0, lx * 0.667],
+                        [0, 1, 0, ly * 0.667],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
 
-        x, y = request.x[0], request.y[0]
-        z = 0.17
+        x, y = request.x[0] * 0.667, request.y[0] * 0.667
+        z = 0.1
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],
@@ -479,9 +481,8 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     async def timer_callback(self):
-        msg = String()
-        # ans1T, ans1R = self.get_transform('camera_link', 'tag56')
-        # self.get_logger().info(f'hand: {ans1T[0]}')
+        ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
+        self.get_logger().info(f'hand: {ans1T[1]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":

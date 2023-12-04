@@ -3,15 +3,11 @@ from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from std_srvs.srv import Empty
-from geometry_msgs.msg import Point, Quaternion, Pose
-from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 
 from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
 
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
-
-from std_msgs.msg import String
 
 
 class State(Enum):
@@ -61,7 +57,10 @@ class Kickstart(Node):
             self.get_logger().info('Where to Write service not available, waiting...')
         while not self.movemp_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Move It MP service not available, waiting...')
+        while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Carisiam mp  service not available, waiting...')
 
+        
     def cal_state_callback(self, msg):
         self.cal_state = msg
 
@@ -71,32 +70,28 @@ class Kickstart(Node):
         self.get_logger().info('finished calibrating')
 
         # DASHES
-        # draw dashes for word to guess 
-        await self.draw_component(1,0)
+        # draw dashes for word to guess
+        await self.draw_component(1, 0)
         self.get_logger().info('drew first dash')
-        await self.draw_component(1,1)
-        await self.draw_component(1,2)
-        await self.draw_component(1,3)
-        await self.draw_component(1,4)
-        await self.draw_component(1,5)
-        
-        # # draw dashes for wrong letters
-        await self.draw_component(0,0)
-        await self.draw_component(0,1)
-        await self.draw_component(0,2)
-        await self.draw_component(0,3)
-        await self.draw_component(0,4)
-        
-        # # draw stand for hangman
-        await self.draw_component(3,0)
-        
+        await self.draw_component(1, 1)
+        await self.draw_component(1, 2)
+        await self.draw_component(1, 3)
+        await self.draw_component(1, 4)
+        await self.draw_component(1, 5)
 
-        
-        
+        # # draw dashes for wrong letters
+        await self.draw_component(0, 0)
+        await self.draw_component(0, 1)
+        await self.draw_component(0, 2)
+        await self.draw_component(0, 3)
+        await self.draw_component(0, 4)
+
+        # # draw stand for hangman
+        await self.draw_component(3, 0)
 
         return response
-    
-    async def draw_component(self,mode,position):
+
+    async def draw_component(self, mode, position):
 
         # if mode = 0 or 1 then drawing dashes
         dash_x = [0.01, 0.09, 0.09]
@@ -104,11 +99,12 @@ class Kickstart(Node):
         dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0,0.01,0.09,0.0,0.0,0.0]
-        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.0,0.0,-0.01,-0.05,-0.05]
-        stand_on = [True, True, True, True, True, True, True, True, True,True,True,True,True,True,False]
-
-        
+        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.01, 0.09, 0.0, 0.0, 0.0]
+        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3,
+                   0.35, 0.4, 0.45, 0.0, 0.0, -0.01, -0.05, -0.05]
+        stand_on = [True, True, True, True, True, True, True,
+                    True, True, True, True, True, True, True, False]
 
         if mode == 0 or mode == 1:
             # take in mode and position and draw component accordingly
@@ -150,7 +146,7 @@ class Kickstart(Node):
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
             await self.cartesian_client.call_async(request3)
             self.get_logger().info(f"all done")
-        
+
         if mode == 3:
             # take in mode and position and draw component accordingly
             request = BoardTiles.Request()
