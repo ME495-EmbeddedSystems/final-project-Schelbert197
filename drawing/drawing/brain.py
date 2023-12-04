@@ -89,7 +89,8 @@ class Brain(Node):
             orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
         )
         self.alphabet = {}
-        self.scale_factor = 0.001 * (0.667)
+        self.board_scale = 0.667
+        self.scale_factor = 0.001 * self.board_scale
         self.shape_list = []
         self.current_mp_pose = Pose()
         self.current_traj_poses = []
@@ -114,28 +115,28 @@ class Brain(Node):
                 for t in range(0, q+1):
                     x = 50*np.cos(2*np.pi*t/q)
                     y = 50+50*np.sin(2*np.pi*t/q)
-                    xvec.append(x*self.scale_factor * (0.667))
-                    yvec.append(y*self.scale_factor * (0.667))
+                    xvec.append(x*self.scale_factor * self.board_scale)
+                    yvec.append(y*self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xvec, 'ylist': yvec}}
                 self.alphabet.update(point_dict)
             elif letter == '|':  # Body of man
-                xlist = [0.0, 0.0, 0.0] * (0.667)
-                ylist = [0.1, 0.05, 0.002] * (0.667)
+                xlist = [0.0, 0.0, 0.0]
+                ylist = [0.1 * self.board_scale, 0.05 * self.board_scale, 0.002 * self.board_scale] 
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '-':  # Arms of man
-                xlist = [0.05, 0.1, 0.15] * (0.667)
-                ylist = [0.05, 0.05, 0.05] * (0.667)
+                xlist = [0.05 * self.board_scale, 0.1 * self.board_scale, 0.15 * self.board_scale]
+                ylist = [0.05 * self.board_scale, 0.05 * self.board_scale, 0.05 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '/':  # Leg of man 1
-                xlist = [0.1, 0.075, 0.05] * (0.667)
-                ylist = [0.1, 0.06, 0.02] * (0.667)
+                xlist = [0.1 * self.board_scale, 0.075 * self.board_scale, 0.05 * self.board_scale]
+                ylist = [0.1 * self.board_scale, 0.06 * self.board_scale, 0.02 * self.board_scale] 
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '_':  # Leg of man 2
-                xlist = [0.0, 0.025, 0.05] * (0.667)
-                ylist = [0.1, 0.06, 0.02] * (0.667)
+                xlist = [0.0 * self.board_scale, 0.025 * self.board_scale, 0.05 * self.board_scale]
+                ylist = [0.1 * self.board_scale, 0.06 * self.board_scale, 0.02 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             else:  # All letters of alphabet
@@ -145,8 +146,8 @@ class Brain(Node):
                 ylist = []
                 for j in range(0, len(verts) - 1):
                     # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
-                    xlist.append(verts[j][0]*self.scale_factor)
-                    ylist.append(verts[j][1]*self.scale_factor)
+                    xlist.append(verts[j][0] * self.scale_factor * self.board_scale)
+                    ylist.append(verts[j][1] * self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
 
