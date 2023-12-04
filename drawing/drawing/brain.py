@@ -28,7 +28,7 @@ class State(Enum):
 class Brain(Node):
 
     def __init__(self):
-        super().__init__("Brain")
+        super().__init__("brain")
 
         self.timer_callback_group = MutuallyExclusiveCallbackGroup()
 
@@ -58,18 +58,31 @@ class Brain(Node):
             Empty, 'calibrate', callback_group=self.cal_callback_group)  # create custom service type
         self.movepose_service_client = self.create_client(
             MovePose, '/moveit_mp', callback_group=self.mp_callback_group)  # create custom service type
-        self.cartesian_mp_service_client = self.create_client(
+        self.cartesian_client = self.create_client(
             Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)  # create custom service type
         self.kickstart_service_client = self.create_client(
-            Empty, '/kickstart', callback_group=self.kick_callback_group)
+            Empty, '/kickstart_service', callback_group=self.kick_callback_group)
 
+        while not self.calibrate_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Calibrate service not available, waiting...')
+        while not self.board_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Where to Write service not available, waiting...')
+        while not self.movepose_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Move It MP service not available, waiting...')
+        while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Carisiam mp  service not available, waiting...')
+        while not self.kickstart_service_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Kickstart  service not available, waiting...')
+
+        
+        
         # Create subscription from hangman.py
         self.hangman = self.create_subscription(
             LetterMsg, '/writer', callback=self.hangman_callback, qos_profile=10)
-        self.home = self.create_subscription(
-            Bool, '/RTH', callback=self.home_callback, qos_profile=10)
-        self.trajectory_status = self.create_subscription(
-            String, '/execute_trajectory_status',callback=self.trajectory_status_callback, qos_profile=10)
+        # self.home = self.create_subscription(
+        #     Bool, '/RTH', callback=self.home_callback, qos_profile=10)
+        # self.trajectory_status = self.create_subscription(
+        #     String, '/execute_trajectory_status',callback=self.trajectory_status_callback, qos_profile=10)
 
         # define global variables
 
@@ -162,22 +175,23 @@ class Brain(Node):
                 board_bool.append(False)
         return board_x, board_y, board_bool
 
-    def trajectory_status_callback(self, msg: String):
-        """Callback for the service to get execute the drawing on the board"""
-        new_msg = msg
-        if new_msg == 'done':
-            # Remove the first instance in the shape list since it was just executed
-            self.shape_list.pop[0]
-            # Return to letter writing to see if more things need to be written
-            self.state = State.LETTER
-        else:
-            self.get_logger().error("An error occured and the trajectory did not return done.")
+    # def trajectory_status_callback(self, msg: String):
+    #     """Callback for the service to get execute the drawing on the board"""
+    #     new_msg = msg
+    #     if new_msg == 'done':
+    #         # Remove the first instance in the shape list since it was just executed
+    #         self.shape_list.pop[0]
+    #         # Return to letter writing to see if more things need to be written
+    #         self.state = State.LETTER
+    #     # else:
+    #         # self.get_logger().error("An error occured and the trajectory did not return done.")
 
     def hangman_callback(self, msg: LetterMsg):
         """Callback when feedback is given from hangman"""
 
         # establishes a global message variable for the duration of the letter state
         self.last_message = msg
+        self.ocr_pub.publish(False)
 
         self.shape_list = []
         for i in range (0,len(self.last_message.positions)):
@@ -239,7 +253,7 @@ class Brain(Node):
         if self.state == State.INITIALIZE:
             # Initializes the kickstart feature then waits for completion
             await self.kickstart_service_client.call_async(request=Empty.Request())
-            self.ocr_pub.publish(True)
+            self.ocr_pub.publish(True) # TODO make ocr publisher also home the robot
             self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:

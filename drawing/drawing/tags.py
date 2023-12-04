@@ -137,7 +137,7 @@ class Tags(Node):
         # wait for services
         while not self.move_js_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
-                'Move Joint State service not available, waiting again...')
+                'Move Pose service not available, waiting again...')
 
         while not self.make_board_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(
@@ -479,9 +479,8 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     async def timer_callback(self):
-        msg = String()
-        # ans1T, ans1R = self.get_transform('camera_link', 'tag56')
-        # self.get_logger().info(f'hand: {ans1T[0]}')
+        ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
+        self.get_logger().info(f'hand: {ans1T[1]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":

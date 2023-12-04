@@ -61,7 +61,10 @@ class Kickstart(Node):
             self.get_logger().info('Where to Write service not available, waiting...')
         while not self.movemp_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Move It MP service not available, waiting...')
+        while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Carisiam mp  service not available, waiting...')
 
+        
     def cal_state_callback(self, msg):
         self.cal_state = msg
 
