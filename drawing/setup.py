@@ -36,10 +36,10 @@ setup(
             "executor = drawing.send_trajectories:main",
             "tags = drawing.tags:Tags_entry",
             "kickstart = drawing.kickstart:main",
-            "test = drawing.test:Test_entry",
-            "ocr = drawing.ocr:main",
+            "paddle_ocr = drawing.paddle_ocr:main",
             "hangman = drawing.hangman:main",
-            "brain = drawing.brain:main"
+            "brain = drawing.brain:main",
+            "image_modification = drawing.image_modification:main"
         ],
     },
 )
