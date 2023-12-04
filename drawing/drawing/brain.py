@@ -190,7 +190,7 @@ class Brain(Node):
     #     new_msg = msg
     #     if new_msg == 'done':
     #         # Remove the first instance in the shape list since it was just executed
-    #         self.shape_list.pop[0]
+    #         self.shape_list.pop(0)
     #         # Return to letter writing to see if more things need to be written
     #         self.state = State.LETTER
     #     # else:
@@ -260,7 +260,7 @@ class Brain(Node):
         await self.cartesian_mp_service_client.call_async(request3)
         self.get_logger().info(f"all done")
 
-        self.shape_list.pop[0]
+        self.shape_list.pop(0)
 
     async def timer_callback(self):
         if self.state == State.INITIALIZE:

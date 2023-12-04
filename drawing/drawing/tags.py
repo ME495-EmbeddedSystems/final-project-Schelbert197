@@ -326,7 +326,7 @@ class Tags(Node):
         Trl = Trb @ Tbl
 
         x, y = request.x[0], request.y[0]
-        z = 0.17
+        z = 0.1
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],

@@ -77,6 +77,7 @@ class Executor(Node):
         self.force_error = 0.0  # N
         self.previous_force_error = 0.0  # N
         self.initial_trajectory_angle = 0.0  # rad
+        self.output_angle = 0.0  # rad
 
         self.distance = 0.01  # distance along quaternion to move
         self.replan = False
@@ -134,6 +135,7 @@ class Executor(Node):
         self.i = 0
 
         self.joint_trajectories = request.joint_trajectories
+        self.output_angle = self.joint_trajectories[0].points[0].positions[5]
         self.pose = request.current_pose
         self.replan = request.replan
         self.use_force_control = request.use_force_control
@@ -168,6 +170,7 @@ class Executor(Node):
         replan_response = await self.replan_client.call_async(Replan.Request(pose=self.pose))
 
         self.joint_trajectories = replan_response.joint_trajectories
+        self.output_angle = self.joint_trajectories[0].points[0].positions[5]
 
     async def timer_callback(self):
         # self.get_logger().info(f"ee_force: {self.ee_force}")
@@ -198,8 +201,8 @@ class Executor(Node):
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
-            Kp = 0.001
-            Kd = 0.001
+            Kp = 0.002
+            Kd = 0.0001
 
             # self.get_logger().info(
             #     f"joint_Trajectory: {self.joint_trajectories[0].points[0]}")
@@ -213,18 +216,19 @@ class Executor(Node):
                 f"initial angle: {self.initial_trajectory_angle}")
 
             if self.use_control_loop:
+                self.get_logger().info(f"ee_force: {self.ee_force}")
                 self.get_logger().info(
-                    f"original joint pos: {self.joint_trajectories[0].points[0].positions[5]}")
-                force_error = 3 - self.ee_force
+                    f"original joint pos: {self.output_angle}")
+                force_error = 2 - self.ee_force
                 angle_adjustment = Kp * force_error + Kd * \
                     (force_error - self.previous_force_error)
-                self.joint_trajectories[0].points[0].positions[5] += angle_adjustment
-                # self.previous_force_error = force_error
+                self.output_angle += angle_adjustment
+                self.joint_trajectories[0].points[0].positions[5] = self.output_angle
+                self.previous_force_error = force_error
                 # here i'm assuming joint angle 6 is basically the same
                 # for all trjactories, which may or may not be true.
 
-                difference_from_initial = self.joint_trajectories[0].points[
-                    0].positions[5] - self.initial_trajectory_angle
+                difference_from_initial = self.output_angle - self.initial_trajectory_angle
 
                 self.get_logger().info(
                     f"modified joint pos: {self.joint_trajectories[0].points[0].positions[5]}")

@@ -6,7 +6,6 @@ from std_srvs.srv import Empty
 from std_msgs.msg import String
 
 from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
-from geometry_msgs.msg import Pose, Point, Quaternion
 
 from enum import Enum, auto
 
@@ -124,10 +123,12 @@ class Kickstart(Node):
 
             self.get_logger().info(f"Pose List for Dash: {pose1}")
             self.get_logger().info(f"Pose List for Dash: {pose_list}")
-            request2 = MovePose.Request()
-            request2.target_pose = pose1
-            request2.use_force_control = False
-            await self.movemp_client.call_async(request2)
+            request2 = Cartesian.Request()
+            request2.poses = [pose1]
+            request2.velocity = 0.1
+            request2.replan = False
+            request2.use_force_control = [False]
+            await self.cartesian_client.call_async(request2)
             self.get_logger().info(f"one done")
 
             request2 = Cartesian.Request()
