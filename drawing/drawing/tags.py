@@ -276,11 +276,11 @@ class Tags(Node):
 
         Tt1b_ = np.array([[1, 0, 0, 0.7],
                           [0, 1, 0, 0.5],
-                          [0, 0, 1, -0.003],
+                          [0, 0, 1, -0.05],
                           [0, 0, 0, 1]])
         Tt2b_ = np.array([[1, 0, 0, 0.7],
                           [0, 1, 0, 0.4],
-                          [0, 0, 1, -0.003],
+                          [0, 0, 1, -0.05],
                           [0, 0, 0, 1]])
         # Ttb = np.array([0.063,0.063,0,1])
         Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
@@ -346,7 +346,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.004 if request.onboard[i] else 0.17
+            z = 0.004 if request.onboard[i] else 0.1
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],

@@ -44,7 +44,7 @@ class Hangman(Node):
 
         # Create Publisher
         self.writer = self.create_publisher(
-            Float64MultiArray, "/writer", qos_profile=10, callback_group=None)
+            LetterMsg, "/writer", qos_profile=10, callback_group=None)
 
         self.create_letters()
         self.pick_words()

@@ -60,7 +60,6 @@ class Kickstart(Node):
         while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Carisiam mp  service not available, waiting...')
 
-        
     def cal_state_callback(self, msg):
         self.cal_state = msg
 
@@ -99,8 +98,15 @@ class Kickstart(Node):
         dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.0,         0.0,     0.0, 0.0, 0.0, 0.0, 0.0,0.0, 0.0, 0.0, 0.01, 0.06, 0.06, 0.06, 0.06]
-        stand_y = [ 0.00666667 , 0.03333333 , 0.06666667 , 0.1   ,      0.13333333 , 0.16666667,0.2   ,      0.23333333 , 0.26666667,  0.3   ,      0.3     ,      0.3 ,0.23333333 ,0.2, 0.16666667]
+        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.01, 0.06, 0.0, 0.0, 0.0]
+        stand_y = [0.00666667, 0.03333333, 0.06666667, 0.1,      0.13333333, 0.16666667,
+                   0.2,      0.23333333, 0.26666667,  0.3,      0.,      0.,
+                   -0.00666667, -0.03333333, -0.03333333]
+        stand_x = [0.0,         0.0,     0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0, 0.01, 0.06, 0.06, 0.06, 0.06]
+        stand_y = [0.00666667, 0.03333333, 0.06666667, 0.1,      0.13333333, 0.16666667, 0.2,
+                   0.23333333, 0.26666667,  0.3,      0.3,      0.3, 0.23333333, 0.2, 0.16666667]
         stand_on = [True, True, True, True, True, True, True,
                     True, True, True, True, True, True, True, False]
 
@@ -130,7 +136,7 @@ class Kickstart(Node):
 
             request2 = Cartesian.Request()
             request2.poses = [pose_list[0]]
-            request2.velocity = 0.015
+            request2.velocity = 0.025
             request2.replan = False
             request2.use_force_control = [dash_on[0]]
             await self.cartesian_client.call_async(request2)
@@ -138,7 +144,7 @@ class Kickstart(Node):
             # draw remaining pose dashes with Cartesian mp
             request3 = Cartesian.Request()
             request3.poses = pose_list[1:]
-            request3.velocity = 0.015
+            request3.velocity = 0.025
             request3.replan = True
             request3.use_force_control = dash_on[1:]
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
