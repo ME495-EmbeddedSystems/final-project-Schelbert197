@@ -499,6 +499,8 @@ class Drawing(Node):
             if not self.cartesian_mp_queue:
                 self.state == State.WAITING
 
+            self.get_logger().info(f"velocity: {self.cartesian_velocity[0]}")
+
             await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
             self.joint_trajectories = ExecuteJointTrajectories.Request()
             # queue the remaining poses, so that if force threshold is exceeded,

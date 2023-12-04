@@ -189,10 +189,10 @@ class Brain(Node):
 
         # establishes a global message variable for the duration of the letter state
         self.last_message = msg
-        self.ocr_pub.publish(False)
+        self.ocr_pub.publish(Bool(data=False))
 
         # Turns off the OCR pipeline
-        self.ocr_pub.publish(False)
+        self.ocr_pub.publish(Bool(data=False))
 
         self.shape_list = []
         for i in range(0, len(self.last_message.positions)):
@@ -211,7 +211,7 @@ class Brain(Node):
     def home_callback(self, msg: Bool):
         """Callback for whether or not the robot has returned to home after writing"""
         if msg == True:
-            self.ocr_pub.publish(True)
+            self.ocr_pub.publish(Bool(data=True))
             self.state = State.WRITING
         else:
             self.state = State.WAITING
@@ -256,7 +256,7 @@ class Brain(Node):
             # Initializes the kickstart feature then waits for completion
             await self.kickstart_service_client.call_async(request=Empty.Request())
             # TODO make ocr publisher also home the robot
-            self.ocr_pub.publish(True)
+            self.ocr_pub.publish(Bool(data=True))
             self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:
@@ -289,7 +289,7 @@ class Brain(Node):
                 ##################### moving to the position####################
                 self.get_logger().info('before moved')
                 await self.movepose_service_client.call_async(goal_js)
-                self.ocr_pub.publish(True)
+                self.ocr_pub.publish(Bool(data=True))
                 self.state = State.WAITING
 
         elif self.state == State.WAITING:

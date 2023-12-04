@@ -240,7 +240,7 @@ class Tags(Node):
         ansT, ansR = await self.future
         ansT1, ansT2 = ansT
         ansR1, ansR2 = ansR
-        while ansT1[0] == 0.0 or ansT2[0] == 0.0:
+        while ansT1[0] == 0.0:
             ansT, ansR = await self.future
             ansT1, ansT2 = ansT
             ansR1, ansR2 = ansR
@@ -264,7 +264,7 @@ class Tags(Node):
 
         self.boardT = Trb1
         self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(self.boardT)
+        pos, rotation = self.matrix_to_position_quaternion(Trb1)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
@@ -273,18 +273,15 @@ class Tags(Node):
         # pos, rotation = self.matrix_to_position_quaternion(Trb2)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
-        
-        
-        
-        
+
         Tt1b_ = np.array([[1, 0, 0, 0.7],
-                        [0, 1, 0, 0.5],
-                        [0, 0, 1, -0.003],
-                        [0, 0, 0, 1]])
+                          [0, 1, 0, 0.5],
+                          [0, 0, 1, -0.003],
+                          [0, 0, 0, 1]])
         Tt2b_ = np.array([[1, 0, 0, 0.7],
-                        [0, 1, 0, 0.4],
-                        [0, 0, 1, -0.003],
-                        [0, 0, 0, 1]])
+                          [0, 1, 0, 0.4],
+                          [0, 0, 1, -0.003],
+                          [0, 0, 0, 1]])
         # Ttb = np.array([0.063,0.063,0,1])
         Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
         Trt2 = self.array_to_transform_matrix(ansT2, ansR2)
@@ -328,7 +325,7 @@ class Tags(Node):
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
 
-        x, y = request.x[0], request.y[0] 
+        x, y = request.x[0], request.y[0]
         z = 0.17
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
@@ -500,13 +497,13 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     async def timer_callback(self):
-        ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
-        self.get_logger().info(f'hand: {ans1T[1]}')
+        # ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
+        # self.get_logger().info(f'hand: {ans1T[1]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":
 
-            self.get_logger().info('function done')
+            # self.get_logger().info('function done')
             ansT1, ansR1 = self.get_transform('panda_link0', 'tag11')
             ansT2, ansR2 = self.get_transform('panda_link0', 'tag12')
             # self.get_logger().info(f'{ansT, ansR}')
