@@ -274,15 +274,30 @@ class Tags(Node):
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
 
-        p, r = self.matrix_to_position_quaternion(self.boardT, 1)
+        Tt1b_ = np.array([[1, 0, 0, 0.7],
+                          [0, 1, 0, 0.5],
+                          [0, 0, 1, -0.003],
+                          [0, 0, 0, 1]])
+        Tt2b_ = np.array([[1, 0, 0, 0.7],
+                          [0, 1, 0, 0.4],
+                          [0, 0, 1, -0.003],
+                          [0, 0, 0, 1]])
+        # Ttb = np.array([0.063,0.063,0,1])
+        Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
+        Trt2 = self.array_to_transform_matrix(ansT2, ansR2)
+        Trb1_ = Trt1 @ Tt1b_
+        Trb2_ = Trt2 @ Tt2b_
+        Trb_ = self.mean_transformation_matrices([Trb1_, Trb2_])
+
+        p, r = self.matrix_to_position_quaternion(Trb_, 1)
         board_pose = Pose()
         board_pose.position = p
         board_pose.orientation = r
 
         board_request = Box.Request()
         board_request.pose = board_pose
-        board_request.size = [2.6, 2.2, 0.06]
-        # await self.make_board_client.call_async(board_request)
+        board_request.size = [2.0, 2.2, 0.02]
+        await self.make_board_client.call_async(board_request)
         # self.robot_board_write.transform.translation = pos
         # self.robot_board_write.transform.rotation = rotation
 
@@ -310,8 +325,8 @@ class Tags(Node):
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
 
-        x, y = request.x[0] * 0.667, request.y[0] * 0.667
-        z = 0.1
+        x, y = request.x[0], request.y[0]
+        z = 0.17
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],
@@ -331,7 +346,7 @@ class Tags(Node):
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
             self.get_logger().info(f'x,y : {x,y}')
-            z = 0.004 if request.onboard[i] else 0.1
+            z = 0.004 if request.onboard[i] else 0.17
 
             # Tla = np.array([[0, 1, 0, x],
             #                 [0.5,  0.0 ,        -0.8660254, y],
