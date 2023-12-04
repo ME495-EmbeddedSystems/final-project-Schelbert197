@@ -58,7 +58,7 @@ class Brain(Node):
             Empty, 'calibrate', callback_group=self.cal_callback_group)  # create custom service type
         self.movepose_service_client = self.create_client(
             MovePose, '/moveit_mp', callback_group=self.mp_callback_group)  # create custom service type
-        self.cartesian_client = self.create_client(
+        self.cartesian_ = self.create_client(
             Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)  # create custom service type
         self.kickstart_service_client = self.create_client(
             Empty, '/kickstart_service', callback_group=self.kick_callback_group)
@@ -69,7 +69,7 @@ class Brain(Node):
             self.get_logger().info('Where to Write service not available, waiting...')
         while not self.movepose_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Move It MP service not available, waiting...')
-        while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
+        while not self.cartesian_mp_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Carisiam mp  service not available, waiting...')
         while not self.kickstart_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Kickstart  service not available, waiting...')
