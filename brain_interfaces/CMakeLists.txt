@@ -19,8 +19,8 @@ find_package(std_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
 "msg/Cartesian.msg"
 "msg/EEForce.msg"
-"LetterMsg.msg"
-"JointTrajectories.msg"
+"msg/LetterMsg.msg"
+"msg/JointTrajectories.msg"
 "srv/Replan.srv"
 "srv/ExecuteJointTrajectories.srv"
 "srv/Cartesian.srv"

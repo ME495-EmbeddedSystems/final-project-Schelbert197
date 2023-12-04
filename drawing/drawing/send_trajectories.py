@@ -9,16 +9,13 @@ from std_msgs.msg import String
 
 from brain_interfaces.msg import EEForce
 
-from brain_interfaces.srv import ExecuteJointTrajectories, Cartesian, Replan, UpdateTrajectory
+from brain_interfaces.srv import ExecuteJointTrajectories, Replan, UpdateTrajectory
 
 from enum import Enum, auto
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 import tf2_ros
-
-import numpy as np
-import transforms3d as tf
 
 
 class State(Enum):

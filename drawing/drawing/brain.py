@@ -8,7 +8,7 @@ from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextToPath
 # from brain_interfaces.msg import Cartesian
 from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
-from gameplay_interfaces.msg import LetterMsg
+from brain_interfaces.msg import LetterMsg
 # from character_interfaces.alphabet import alphabet
 from geometry_msgs.msg import Pose, Point, Quaternion
 
@@ -39,18 +39,18 @@ class Brain(Node):
             Pose, '/moveit_mp', 10)
 
         self.state_pub = self.create_publisher(
-            String, '/brain_states', 10) # maybe use this to publish the states
+            String, '/brain_states', 10)  # maybe use this to publish the states
 
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
-        
+
         # Callback groups
         self.cal_callback_group = MutuallyExclusiveCallbackGroup()
         self.tile_callback_group = MutuallyExclusiveCallbackGroup()
         self.mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
         self.kick_callback_group = MutuallyExclusiveCallbackGroup()
-        
+
         # Create clients
         self.board_service_client = self.create_client(
             BoardTiles, '/where_to_write', callback_group=self.tile_callback_group)  # create custom service type
@@ -69,7 +69,7 @@ class Brain(Node):
         self.home = self.create_subscription(
             Bool, '/RTH', callback=self.home_callback, qos_profile=10)
         self.trajectory_status = self.create_subscription(
-            String, '/execute_trajectory_status',callback=self.trajectory_status_callback, qos_profile=10)
+            String, '/execute_trajectory_status', callback=self.trajectory_status_callback, qos_profile=10)
 
         # define global variables
 
@@ -96,38 +96,38 @@ class Brain(Node):
         letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0|-/_'
         for i in range(0, len(letters)):
             letter = letters[i]
-            if letter == '0': # Head of man
-                xvec=[]
-                yvec=[]
+            if letter == '0':  # Head of man
+                xvec = []
+                yvec = []
                 q = 25
-                for t in range(0,q+1):
+                for t in range(0, q+1):
                     x = 50*np.cos(2*np.pi*t/q)
                     y = 50+50*np.sin(2*np.pi*t/q)
                     xvec.append(x*self.scale_factor)
                     yvec.append(y*self.scale_factor)
                 point_dict = {letter: {'xlist': xvec, 'ylist': yvec}}
                 self.alphabet.update(point_dict)
-            elif letter == '|': # Body of man
-                xlist = [0.0,0.0,0.0]
-                ylist = [0.1,0.05,0.002]
+            elif letter == '|':  # Body of man
+                xlist = [0.0, 0.0, 0.0]
+                ylist = [0.1, 0.05, 0.002]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
-            elif letter == '-': # Arms of man
-                xlist = [0.05,0.1,0.15]
-                ylist = [0.05,0.05,0.05]
+            elif letter == '-':  # Arms of man
+                xlist = [0.05, 0.1, 0.15]
+                ylist = [0.05, 0.05, 0.05]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
-            elif letter == '/': # Leg of man 1
-                xlist = [0.1,0.075,0.05]
-                ylist = [0.1,0.06,0.02]
+            elif letter == '/':  # Leg of man 1
+                xlist = [0.1, 0.075, 0.05]
+                ylist = [0.1, 0.06, 0.02]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
-            elif letter == '_': # Leg of man 2
-                xlist = [0.0,0.025,0.05]
-                ylist = [0.1,0.06,0.02]
+            elif letter == '_':  # Leg of man 2
+                xlist = [0.0, 0.025, 0.05]
+                ylist = [0.1, 0.06, 0.02]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
-            else: # All letters of alphabet
+            else:  # All letters of alphabet
                 fp = FontProperties(family="MS Gothic", style="normal")
                 verts, codes = TextToPath().get_text_path(fp, letters[i])
                 xlist = []
@@ -138,7 +138,6 @@ class Brain(Node):
                     ylist.append(verts[j][1]*self.scale_factor)
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
-        
 
     def process_letter_points(self, letter):
         """ Function to make it easier to prepare letters for board tile type"""
@@ -180,13 +179,14 @@ class Brain(Node):
         self.last_message = msg
 
         self.shape_list = []
-        for i in range (0,len(self.last_message.positions)):
+        for i in range(0, len(self.last_message.positions)):
             tile_origin = BoardTiles.Request()
             tile_origin.mode = self.last_message.mode[i]
             tile_origin.position = self.last_message.positions[i]
-            
+
             # get x, y, onboard values
-            tile_origin.x, tile_origin.y, tile_origin.onboard = self.process_letter_points(self.last_message.letters[i])
+            tile_origin.x, tile_origin.y, tile_origin.onboard = self.process_letter_points(
+                self.last_message.letters[i])
             self.shape_list.append(tile_origin)
 
         # switches to calibrate state
@@ -199,7 +199,7 @@ class Brain(Node):
             self.state = State.WRITING
         else:
             self.state = State.WAITING
-            
+
     async def letter_writer(self, shape: BoardTiles.Request()):
         """Function to process the shape into trajectory service calls"""
         resp = await self.tile_client.call_async(shape)
@@ -232,7 +232,7 @@ class Brain(Node):
         self.get_logger().info(f"pose_list: {pose_list[1:]}")
         await self.cartesian_client.call_async(request3)
         self.get_logger().info(f"all done")
-        
+
         self.shape_list.pop[0]
 
     async def timer_callback(self):
@@ -257,7 +257,7 @@ class Brain(Node):
             if self.shape_list:
                 # moves to the approaching state if there are still things to be written
                 await self.letter_writer(self.shape_list[0])
-                
+
                 # self.state = State.WAITING
             else:
                 # Turns on the OCR because the play has ended and returns to WAITING
@@ -268,12 +268,12 @@ class Brain(Node):
             pass
             # waiting state for writing actions
             # if self.kick_future:
-                # Turns on OCR when kickstart finishes and waits for hangman callback
-            
-                # self.kick_future = None
+            # Turns on OCR when kickstart finishes and waits for hangman callback
+
+            # self.kick_future = None
             # elif self.calibrate_future:
             #     # Listens for a return value from calibration to switch to LETTER
-                
+
             #     self.calibrate_future = None
             # elif self.board_future:
             #     # Looks that board has returned values
@@ -283,8 +283,7 @@ class Brain(Node):
             #     self.board_future = None
             #     self.state = State.APPROACHING
             # else:
-                # If nothing has returned from client call, WAITING passes
-            
+            # If nothing has returned from client call, WAITING passes
 
         # elif self.state == State.WRITING:
         #     # waiting state for the Franka to complete the mp and cartesian trajectories
@@ -304,6 +303,7 @@ def main(args=None):
     brain = Brain()
     rclpy.spin(brain)
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
