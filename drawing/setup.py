@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'pickmeup'
+package_name = 'drawing'
 
 setup(
     name=package_name,
@@ -12,7 +12,11 @@ setup(
         ('share/' + package_name,
          [
              'package.xml',
-             'launch/pickup.launch.xml'
+             'launch/drawing.launch.xml',
+             'launch/april_tag.launch.xml',
+             'launch/image_proc.launch.py',
+             'config/tag.yaml',
+             'config/view_camera.rviz'
          ]
          ),
     ],
@@ -26,7 +30,13 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "picker = pickmeup.picker:main",
+            "draw = drawing.draw:main",
+            "executor = drawing.send_trajectories:main",
+            "tags = drawing.tags:Tags_entry",
+            "kickstart = drawing.kickstart:main",
+            "test = drawing.test:Test_entry",
+            "ocr = drawing.ocr:main",
+            "hangman = drawing.hangman:main"
         ],
     },
 )

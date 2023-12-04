@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>pickmeup</name>
+  <name>drawing</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="agwananyaa2001@gmail.com">aawizard</maintainer>
@@ -11,7 +11,9 @@
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
-  <build_depend>panda_gripper</build_depend>
+  <exec_depend>character_interfaces</exec_depend>
+  <exec_depend>joint_interfaces</exec_depend>
+  <exec_depend>brain_interfaces</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

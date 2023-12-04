@@ -9,7 +9,8 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml', "launch/ocr_game.launch.xml"]),
+        ('share/' + package_name,
+         ['package.xml', "launch/ocr_game.launch.xml"]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -21,7 +22,10 @@ setup(
     entry_points={
         'console_scripts': [
             "ocr = ocr.ocr:main",
-            "hangman = ocr.hangman:main"
+            "hangman = ocr.hangman:main",
+            "image_modification = ocr.image_modification:main",
+            "paddle_ocr = ocr.paddle_ocr:main",
+            "tesseract_ocr = ocr.tesseract_ocr:main"
         ],
     },
 )

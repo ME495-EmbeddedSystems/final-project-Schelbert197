@@ -1,14 +1,11 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>ocr</name>
+  <name>character_interfaces</name>
   <version>0.0.0</version>
-  <description>ROS package for OCR on a whiteboard</description>
-  <maintainer email="241abhishek@gmail.com">abhi2001</maintainer>
-  <license>Apache License 2.0</license>
-
-  <exec_depend>ros2launch</exec_depend>
-  <exec_depend>gameplay_interfaces</exec_depend>
+  <description>TODO: Package description</description>
+  <maintainer email="gjcliff@gmail.com">graham</maintainer>
+  <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
