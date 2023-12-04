@@ -198,28 +198,6 @@ class Executor(Node):
                 self.get_logger().info("poses all done")
                 self.joint_trajectories.clear()
 
-        # elif self.ee_force < self.lower_threshold and self.use_force_control and self.joint_trajectories:
-        #     self.get_logger().info(
-        #         f"lower_threshold: {self.lower_threshold}")
-        #     self.get_logger().info(
-        #         f"LOWER FORCE THRESHOLD EXCEEDED, EE_FORCE: {self.ee_force}")
-        #     # self.get_logger().info(f"joint trajectories: {self.joint_trajectories}")
-        #     # clear the current trajectories first, as we don't want to execute them anymore
-
-        #     if self.replan:
-        #         self.replan(True)
-
-        #         self.use_control_loop = True
-        #         self.initial_trajectory_angle = self.joint_trajectories[0].points[0].positions[5]
-
-        #     else:
-        #         self.lower_threshold = -1.5
-
-        # if list of waypoints is not empty, publish to the topic that executes
-        # trajectories oof the panda
-
-        # fyi if self.joint_trajectories is empty, putting it in the if statement like this will return false
-
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
@@ -244,6 +222,7 @@ class Executor(Node):
                 angle_adjustment = Kp * force_error + Kd * \
                     (force_error - self.previous_force_error)
                 self.joint_trajectories[0].points[0].positions[5] += angle_adjustment
+                self.previous_force_error = force_error
                 # here i'm assuming joint angle 6 is basically the same
                 # for all trjactories, which may or may not be true.
 
