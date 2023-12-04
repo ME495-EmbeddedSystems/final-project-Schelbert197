@@ -301,6 +301,13 @@ class Brain(Node):
 
                 # self.state = State.WAITING
             else:
+                request4 = Cartesian.Request()
+                request4.poses = [Pose(position=Point(x=0.0, y=-0.15, z=0.3), orientation=Quaternion(
+                    x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
+                request4.velocity = 0.1
+                request4.replan = False
+                request4.use_force_control = [False]
+                await self.cartesian_client.call_async(request4)
                 # Turns on the OCR because the play has ended and returns to WAITING
                 goal_js = MovePose.Request()
                 # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]

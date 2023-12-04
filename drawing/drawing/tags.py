@@ -389,7 +389,7 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] + 0.0015
+            z = ansT[2] + 0.0013
         else:
             z = ansT[2] - 0.002
 

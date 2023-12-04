@@ -202,8 +202,8 @@ class Executor(Node):
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
-            Kp = 0.0027
-            Ki = 0.000001
+            Kp = 0.0028
+            Ki = 0.000002
             Kd = 0.0009
 
             # self.get_logger().info(
