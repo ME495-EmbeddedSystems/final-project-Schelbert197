@@ -99,7 +99,7 @@ class Kickstart(Node):
 
         # if mode = 3 then drawing stand
         stand_x = [0.01, 0.09, 0.09,0.09]
-        stand_y = [0.5, 0.5, 0.0,0.0]
+        stand_y = [0.0, 0.0, 0.05, 0.05]
         stand_on = [True, True, True, False]
 
         if mode == 0 or mode == 1:
