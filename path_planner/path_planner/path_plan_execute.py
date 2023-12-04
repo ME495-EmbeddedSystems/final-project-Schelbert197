@@ -519,6 +519,5 @@ class Path_Plan_Execute():
 
         collision_object.primitives.append(box_size)
         collision_object.primitive_poses.append(box_pose)
-        self.node.get_logger().info("heeeeeeeeeeeeeeeeeeeeeeeeeeeer")
 
         self.planning_scene_publisher.publish(collision_object)

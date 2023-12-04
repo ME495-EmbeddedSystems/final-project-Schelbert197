@@ -95,14 +95,14 @@ class Kickstart(Node):
     async def draw_component(self, mode, position):
 
         # if mode = 0 or 1 then drawing dashes
-        dash_x = [0.01, 0.09, 0.09]
-        dash_y = [0.0, 0.0, 0.0]
-        dash_on = [True, True, False]
+        dash_x = [0.01, 0.09]
+        dash_y = [0.0, 0.0]
+        dash_on = [True, True]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.01, 0.09, 0.09, 0.09]
-        stand_y = [0.5, 0.5, 0.0, 0.0]
-        stand_on = [True, True, True, False]
+        stand_x = [0.01, 0.09, 0.09]
+        stand_y = [0.0, 0.05, 0.05]
+        stand_on = [True, True, True]
 
         if mode == 0 or mode == 1:
             # take in mode and position and draw component accordingly
@@ -188,13 +188,13 @@ class Kickstart(Node):
             await self.cartesian_client.call_async(request3)
             self.get_logger().info(f"all done")
 
-            request4 = Cartesian.Request()
-            request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
-                x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
-            request4.velocity = 0.1
-            request4.replan = False
-            request4.use_force_control = [False]
-            await self.cartesian_client.call_async(request4)
+            # request4 = Cartesian.Request()
+            # request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
+            #     x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
+            # request4.velocity = 0.1
+            # request4.replan = False
+            # request4.use_force_control = [False]
+            # await self.cartesian_client.call_async(request4)
 
 
 def main(args=None):

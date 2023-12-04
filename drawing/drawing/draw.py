@@ -39,6 +39,8 @@ class State(Enum):
 
     PLAN_MOVEGROUP = auto()
     PLAN_CARTESIAN_MOVE = auto()
+    MAKE_BOARD = auto()
+    REMOVE_BOARD = auto()
 
 
 class Drawing(Node):
@@ -193,6 +195,7 @@ class Drawing(Node):
         table = Pose()
         table.position = Point(z=-1.6)
         self.draw_obs(name="table", pos=table, size=[1.5, 1.0, 3.0])
+        self.board_future = rclpy.task.Future()
 
     def array_to_transform_matrix(self, translation, quaternion):
         # Normalize the quaternion
@@ -274,13 +277,8 @@ class Drawing(Node):
             pass
 
     async def moveit_mp_callback(self, request, response):
-
-        ansT, ansR = self.get_transform("panda_link0", "board")
-        board_pose = Pose()
-        board_pose.position = Point(x=ansT[0], y=ansT[1], z=ansT[2])
-        board_pose.orientation = Quaternion(
-            x=ansR[0], y=ansR[1], z=ansR[2], w=ansR[3])
-        # self.draw_obs(pos=board_pose, name="board", size=[2.0, 2.0, 0.02])
+        self.state = State.MAKE_BOARD
+        await self.board_future
 
         self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
 
@@ -297,6 +295,8 @@ class Drawing(Node):
 
         self.plan_future = Future()
         self.execute_future = Future()
+        self.state = State.REMOVE_BOARD
+        await self.board_future
         # self.draw_obs(pos=board_pose, name="board", size=[0.0, 0.0, -1.0])
 
         return response
@@ -580,6 +580,21 @@ class Drawing(Node):
 
                 self.state = State.EXECUTING
                 self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
+        elif self.state == State.MAKE_BOARD:
+            ansT, ansR = self.get_transform("panda_link0", "board")
+            board_pose = Pose()
+            board_pose.position = Point(x=ansT[0], y=ansT[1], z=ansT[2])
+            board_pose.orientation = Quaternion(
+                x=ansR[0], y=ansR[1], z=ansR[2], w=ansR[3])
+            self.draw_obs(pos=board_pose, name="board", size=[2.0, 2.0, 0.02])
+            self.board_future.set_result("fdsa")
+
+        elif self.state == State.REMOVE_BOARD:
+            board_pose = Pose()
+            board_pose.position.z = -0.3
+            self.draw_obs(pos=board_pose, name="board", size=[0.0, 0.0, 0.0])
+            self.board_future.set_result("fdsa")
+
         self.i += 1
 
 

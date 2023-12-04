@@ -68,8 +68,8 @@ class Grid:
         point_y = (point[0])*self.cell_size + self.yrange[0]
         point_x = (point[1])*self.cell_size + self.xrange[0]
         if mode == 0 or mode == 1:
-            point_y += .2*position
-            point_x += .2*position
+            # point_y += .2*position
+            point_x += .1*position
         return [point_x, point_y]
 
 
@@ -125,6 +125,7 @@ class Tags(Node):
         self.robot_board = TransformStamped()
         self.robot_board.header.frame_id = "panda_link0"
         self.robot_board.child_frame_id = "board"
+        self.robot_board.transform.translation.z = -0.9
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
 
@@ -306,6 +307,7 @@ class Tags(Node):
         # self.robot_board_write.transform.rotation = rotation
 
         self.state = State.OTHER
+        self.goal_state = "not"
         self.get_logger().info(f'Trb: {pos,rotation}')
 
         self.get_logger().info("calibrate")
@@ -349,6 +351,7 @@ class Tags(Node):
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
+            self.get_logger().info(f"sanity check:  {x,y}")
             self.get_logger().info(f'x,y : {x,y}')
             z = 0.004 if request.onboard[i] else 0.1
 
@@ -386,9 +389,9 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] + 0.0025
+            z = ansT[2] + 0.0015
         else:
-            z = ansT[2] - 0.003
+            z = ansT[2] - 0.002
 
         self.get_logger().info("reached update trajcetory callback")
 
