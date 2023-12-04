@@ -165,8 +165,15 @@ class ImageModification(Node):
                 binary_image = cv2.bitwise_not(binarised)
                 # cv2.imshow("Word_Recognition", binary_image)
 
+                # Create a named window that alllows resizing
+                cv2.namedWindow('Recognition', cv2.WINDOW_NORMAL)
+
+                # Resize the window to the specified height and width
+                cv2.resizeWindow('Recognition', 400, 290)
+
                 # display modified image
-                cv2.imshow("Recognition", imutils.resize(binary_image, height=200))
+                # cv2.imshow("Recognition", imutils.resize(binary_image, height=200))
+                cv2.imshow("Recognition", binary_image)
 
                 # convert images to msg format and publish
                 img_publish_1 = self.cv_bridge.cv2_to_imgmsg(binary_image)

@@ -95,14 +95,14 @@ class Kickstart(Node):
     async def draw_component(self, mode, position):
 
         # if mode = 0 or 1 then drawing dashes
-        dash_x = [0.01, 0.09]
-        dash_y = [0.0, 0.0]
-        dash_on = [True, True]
+        dash_x = [0.01, 0.09, 0.09]
+        dash_y = [0.0, 0.0, 0.0]
+        dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.01, 0.09, 0.09]
-        stand_y = [0.05, 0.05, 0.00]
-        stand_on = [True, True, True]
+        stand_x = [-0.01, 0.05, 0.05, 0.05]
+        stand_y = [0.05, 0.05, 0.00, 0.00]
+        stand_on = [True, True, True, False]
 
         if mode == 0 or mode == 1:
             # take in mode and position and draw component accordingly

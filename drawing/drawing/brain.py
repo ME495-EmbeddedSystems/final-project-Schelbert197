@@ -116,8 +116,8 @@ class Brain(Node):
                 yvec = []
                 q = 25
                 for t in range(0, q+1):
-                    x = 50*np.cos(2*np.pi*t/q)
-                    y = 50+50*np.sin(2*np.pi*t/q)
+                    x = 35*np.cos(2*np.pi*t/q)
+                    y = 35+35*np.sin(2*np.pi*t/q)
                     xvec.append(x*self.scale_factor * self.board_scale)
                     yvec.append(y*self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xvec, 'ylist': yvec}}
@@ -150,16 +150,16 @@ class Brain(Node):
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             else:  # All letters of alphabet
-                fp = FontProperties(family="MS Gothic", style="normal")
+                fp = FontProperties(family="Liberation Sans Narrow", style="normal")
                 verts, codes = TextToPath().get_text_path(fp, letters[i])
                 xlist = []
                 ylist = []
                 for j in range(0, len(verts) - 1):
-                    # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
-                    xlist.append(
-                        verts[j][0] * self.scale_factor * self.board_scale)
-                    ylist.append(
-                        verts[j][1] * self.scale_factor * self.board_scale)
+                    if verts[j][0] > 0: #Commented out because I want to keep the 0,0 for lifting off the board
+                        xlist.append(
+                            verts[j][0] * self.scale_factor * self.board_scale)
+                        ylist.append(
+                            verts[j][1] * self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
 
@@ -302,12 +302,12 @@ class Brain(Node):
                 # self.state = State.WAITING
             else:
                 request4 = Cartesian.Request()
-                request4.poses = [Pose(position=Point(x=0.0, y=-0.15, z=0.3), orientation=Quaternion(
+                request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
                     x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
                 request4.velocity = 0.1
                 request4.replan = False
                 request4.use_force_control = [False]
-                await self.cartesian_client.call_async(request4)
+                await self.cartesian_mp_service_client.call_async(request4)
                 # Turns on the OCR because the play has ended and returns to WAITING
                 goal_js = MovePose.Request()
                 # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]

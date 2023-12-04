@@ -122,11 +122,11 @@ class Hangman(Node):
                         mode_list.append(1)
             else:
                 self.get_logger().info('wrong guess')
-                self.guessed_letters.append(upper_guess)
                 # write wrong letter
                 letter_list.append(upper_guess)
                 mode_list.append(0)
                 position_list.append(len(self.guessed_letters))
+                self.guessed_letters.append(upper_guess)
                 # write hangman
                 letter_list.append(self.man_list[self.current_wrong_guesses])
                 mode_list.append(2)
