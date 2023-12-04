@@ -78,7 +78,7 @@ class Kickstart(Node):
         await self.draw_component(1, 2)
         await self.draw_component(1, 3)
         await self.draw_component(1, 4)
-        await self.draw_component(1, 5)
+        # await self.draw_component(1, 5)
 
         # # draw dashes for wrong letters
         await self.draw_component(0, 0)
@@ -95,16 +95,14 @@ class Kickstart(Node):
     async def draw_component(self, mode, position):
 
         # if mode = 0 or 1 then drawing dashes
-        dash_x = [0.02, 0.055, 0.055]
+        dash_x = [0.01, 0.09, 0.09]
         dash_y = [0.0, 0.0, 0.0]
         dash_on = [True, True, False]
 
-        stand_x = [0.0,         0.0,     0.0, 0.0, 0.0, 0.0,
-                   0.0, 0.0, 0.0, 0.0, 0.01, 0.06, 0.06, 0.06, 0.06]
-        stand_y = [0.00666667, 0.03333333, 0.06666667, 0.1,      0.13333333, 0.16666667, 0.2,
-                   0.23333333, 0.26666667,  0.3,      0.3,      0.3, 0.23333, 0.2, 0.16666667]
-        stand_on = [True, True, True, True, True, True, True,
-                    True, True, True, True, True, True, True, False]
+        # if mode = 3 then drawing stand
+        stand_x = [0.01, 0.09, 0.09, 0.09]
+        stand_y = [0.5, 0.5, 0.0, 0.0]
+        stand_on = [True, True, True, False]
 
         if mode == 0 or mode == 1:
             # take in mode and position and draw component accordingly

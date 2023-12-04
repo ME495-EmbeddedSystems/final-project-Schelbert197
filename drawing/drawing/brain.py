@@ -92,7 +92,7 @@ class Brain(Node):
             orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
         )
         self.alphabet = {}
-        self.board_scale = 0.667
+        self.board_scale = 1.0
         self.scale_factor = 0.001 * self.board_scale
         self.shape_list = []
         self.current_mp_pose = Pose()
