@@ -69,7 +69,7 @@ class Executor(Node):
         self.joint_trajectories = []
         self.pose = None
         self.ee_force = 0
-        self.upper_threshold = 2.0  # N
+        self.upper_threshold = 3.0  # N
         self.lower_threshold = 1.0  # N
         self.state = None
         self.use_force_control = False
@@ -85,7 +85,7 @@ class Executor(Node):
 
         self.future = Future()
 
-        self.i = 0
+        self.i = 1
 
     def get_transform(self, parent_frame, child_frame):
         """
