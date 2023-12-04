@@ -69,7 +69,7 @@ class Executor(Node):
         self.joint_trajectories = []
         self.pose = None
         self.ee_force = 0
-        self.upper_threshold = 5.0  # N
+        self.upper_threshold = 3.0  # N
         self.lower_threshold = 1.0  # N
         self.state = None
         self.use_force_control = False
@@ -78,13 +78,14 @@ class Executor(Node):
         self.previous_force_error = 0.0  # N
         self.initial_trajectory_angle = 0.0  # rad
         self.output_angle = 0.0  # rad
+        self.integral_force_error = 0.0
 
         self.distance = 0.01  # distance along quaternion to move
         self.replan = False
 
         self.future = Future()
 
-        self.i = 0
+        self.i = 1
 
     def get_transform(self, parent_frame, child_frame):
         """
@@ -201,8 +202,9 @@ class Executor(Node):
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
-            Kp = 0.002
-            Kd = 0.0001
+            Kp = 0.0028
+            Ki = 0.000002
+            Kd = 0.0009
 
             # self.get_logger().info(
             #     f"joint_Trajectory: {self.joint_trajectories[0].points[0]}")
@@ -219,9 +221,10 @@ class Executor(Node):
                 self.get_logger().info(f"ee_force: {self.ee_force}")
                 self.get_logger().info(
                     f"original joint pos: {self.output_angle}")
-                force_error = 2 - self.ee_force
-                angle_adjustment = Kp * force_error + Kd * \
-                    (force_error - self.previous_force_error)
+                force_error = 1.75 - self.ee_force
+                self.integral_force_error += force_error * 0.1
+                angle_adjustment = Kp * force_error + Ki * self.integral_force_error + \
+                    Kd * (force_error - self.previous_force_error)
                 self.output_angle += angle_adjustment
                 self.joint_trajectories[0].points[0].positions[5] = self.output_angle
                 self.previous_force_error = force_error

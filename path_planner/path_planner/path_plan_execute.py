@@ -248,6 +248,8 @@ class Path_Plan_Execute():
             stamp=self.node.get_clock().now().to_msg()
         )
 
+        self.node.get_logger().info("what")
+
         position.group_name = self.node.group_name
         position.avoid_collisions = True
         position.ik_link_name = 'panda_hand_tcp'
@@ -313,7 +315,7 @@ class Path_Plan_Execute():
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
         # setting this to 0.1 for now, could cause problems later
-        self.cartesian_path_request.max_step = 0.005
+        self.cartesian_path_request.max_step = 0.01
         # self.cartesian_path_request.jump_threshold = 0
         # self.cartesian_path_request.prismatic_jump_threshold = 0
         # self.cartesian_path_request.revolute_jump_threshold = 0
@@ -517,6 +519,5 @@ class Path_Plan_Execute():
 
         collision_object.primitives.append(box_size)
         collision_object.primitive_poses.append(box_pose)
-        self.node.get_logger().info("heeeeeeeeeeeeeeeeeeeeeeeeeeeer")
 
         self.planning_scene_publisher.publish(collision_object)
