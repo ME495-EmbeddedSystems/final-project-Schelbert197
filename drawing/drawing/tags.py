@@ -273,6 +273,7 @@ class Tags(Node):
         # pos, rotation = self.matrix_to_position_quaternion(Trb2)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
+
         p, r = self.matrix_to_position_quaternion(self.boardT, 1)
         board_pose = Pose()
         board_pose.position = p

@@ -397,7 +397,7 @@ class Drawing(Node):
         pose = request.pose  # position
 
         # Add the box to the planning scene using the add_box method
-        # self.path_planner.add_box(box_id, frame_id, dimensions, pose)
+        self.path_planner.add_box(box_id, frame_id, dimensions, pose)
         return response
 
     def get_transform(self, parent_frame, child_frame):
