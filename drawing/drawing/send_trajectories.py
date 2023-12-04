@@ -219,7 +219,7 @@ class Executor(Node):
                 angle_adjustment = Kp * force_error + Kd * \
                     (force_error - self.previous_force_error)
                 self.joint_trajectories[0].points[0].positions[5] += angle_adjustment
-                self.previous_force_error = force_error
+                # self.previous_force_error = force_error
                 # here i'm assuming joint angle 6 is basically the same
                 # for all trjactories, which may or may not be true.
 
@@ -232,9 +232,11 @@ class Executor(Node):
                 if difference_from_initial > 0.09:
                     self.get_logger().info(f"tilted too far forward, replannign")
                     await self.replan_trajectory(False)
+                    self.use_control_loop = False
                 elif difference_from_initial < -0.09:
                     self.get_logger().info(f"tilted too far backward, replannign")
                     await self.replan_trajectory(True)
+                    self.use_control_loop = False
 
                 self.pub.publish(self.joint_trajectories[0])
                 self.joint_trajectories.pop(0)

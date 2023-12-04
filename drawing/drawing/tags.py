@@ -240,7 +240,7 @@ class Tags(Node):
         ansT, ansR = await self.future
         ansT1, ansT2 = ansT
         ansR1, ansR2 = ansR
-        while ansT1[0] == 0.0 or ansT2[0] == 0.0:
+        while ansT1[0] == 0.0:
             ansT, ansR = await self.future
             ansT1, ansT2 = ansT
             ansR1, ansR2 = ansR
@@ -264,7 +264,7 @@ class Tags(Node):
 
         self.boardT = Trb1
         self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(self.boardT)
+        pos, rotation = self.matrix_to_position_quaternion(Trb1)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
@@ -282,7 +282,7 @@ class Tags(Node):
         board_request = Box.Request()
         board_request.pose = board_pose
         board_request.size = [2.6, 2.2, 0.06]
-        await self.make_board_client.call_async(board_request)
+        # await self.make_board_client.call_async(board_request)
         # self.robot_board_write.transform.translation = pos
         # self.robot_board_write.transform.rotation = rotation
 
@@ -482,13 +482,13 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     async def timer_callback(self):
-        ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
-        self.get_logger().info(f'hand: {ans1T[1]}')
+        # ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
+        # self.get_logger().info(f'hand: {ans1T[1]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":
 
-            self.get_logger().info('function done')
+            # self.get_logger().info('function done')
             ansT1, ansR1 = self.get_transform('panda_link0', 'tag11')
             ansT2, ansR2 = self.get_transform('panda_link0', 'tag12')
             # self.get_logger().info(f'{ansT, ansR}')
