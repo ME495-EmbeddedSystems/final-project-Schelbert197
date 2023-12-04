@@ -277,6 +277,17 @@ class Brain(Node):
                 # self.state = State.WAITING
             else:
                 # Turns on the OCR because the play has ended and returns to WAITING
+                goal_js = MovePose.Request()
+                # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
+                # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
+                goal_js.target_pose.position = Point(
+                    x=0.545029890155533, y=0.05943234468738731, z=0.5893544164237723)
+                goal_js.target_pose.orientation = Quaternion(
+                    x=-0.48576480709767544, y=-0.5175973920275, z=-0.4696623291331898, w=0.5249216975367619)
+                goal_js.use_force_control = False
+                ##################### moving to the position####################
+                self.get_logger().info('before moved')
+                await self.movepose_service_client.call_async(goal_js)
                 self.ocr_pub.publish(True)
                 self.state = State.WAITING
 
