@@ -76,7 +76,7 @@ class Tags(Node):
 
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
-        self.grid = Grid((0, .80), (0, .60), .10)
+        self.grid = Grid((0, .533), (0, .40), .0667)
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
@@ -245,11 +245,11 @@ class Tags(Node):
             # self.get_logger().info(f"{ansT, ansR}")
             self.get_logger().info('value set in service')
         # if ansT[0] != 0.0:
-        Tt1b = np.array([[1, 0, 0, 0.05],
+        Tt1b = np.array([[1, 0, 0, 0.183],
                         [0, 1, 0, 0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
-        Tt2b = np.array([[1, 0, 0, 0.05],
+        Tt2b = np.array([[1, 0, 0, 0.183],
                         [0, 1, 0, -0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
@@ -301,14 +301,14 @@ class Tags(Node):
         # Trb = self.array_to_transform_matrix(ansT, ansR)
         Trb = self.boardT
         lx, ly = self.grid.grid_to_world(request.mode, request.position)
-        Tbl = np.array([[1, 0, 0, lx],
-                        [0, 1, 0, ly],
+        Tbl = np.array([[1, 0, 0, lx * 0.667],
+                        [0, 1, 0, ly * 0.667],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
 
-        x, y = request.x[0], request.y[0]
-        z = 0.17
+        x, y = request.x[0] * 0.667, request.y[0] * 0.667
+        z = 0.1
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],
