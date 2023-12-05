@@ -112,7 +112,7 @@ class Paddle_Ocr(Node):
         """Confirm whether the guess is a six-letter word"""
         try:
             # check if the guess is a single letter
-            if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 6:
+            if all(char.isalpha() for char in result[0][0][0]) and len(result[0][0][0])== 5:
                 if result[0][0][1] > 0.75: # check confidence
                     guess = result[0][0][0].upper()
                     self.guess_tracking_word(guess)

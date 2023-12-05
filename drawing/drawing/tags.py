@@ -46,25 +46,30 @@ class Grid:
 
     def grid_to_world(self, mode, position):
         if mode == 0:
-            point = (1, position+2)
+            point = (0, position+2)
+
         if mode == 1:
-            point = (4, position+2)
+            point = (2, position+2)
+
         if mode == 2:
             if position == 0:
-                point = (4, 0)
-            if position == 1:
-                point = (3, 1)
-            if position == 2:
-                point = (3, 0)
-            if position == 3:
-                point = (2, 0)
-            if position == 4:
                 point = (2, 1)
+            if position == 1:
+                point = (1, 1)
+            if position == 2:
+                point = (1, 0)
+            if position == 3:
+                point = (0, 0)
+            if position == 4:
+                point = (0, 1)
         if mode == 3:
-            point = (1, 0)
+            point = (3, 0)
 
         point_y = (point[0])*self.cell_size + self.yrange[0]
         point_x = (point[1])*self.cell_size + self.xrange[0]
+        if mode == 0 or mode == 1:
+            # point_y += .2*position
+            point_x += .1*position
         return [point_x, point_y]
 
 
@@ -78,7 +83,7 @@ class Tags(Node):
 
         self.file_path_A = 'A.csv'
         self.file_path_B = 'B.csv'
-        self.grid = Grid((0, .533), (0, .40), .0667)
+        self.grid = Grid((0, .8), (0, .40), .1)
         self.path_planner = Path_Plan_Execute(self)
         self.state = State.OTHER
         self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
@@ -110,8 +115,6 @@ class Tags(Node):
         # create client
         self.move_js_client = self.create_client(
             MovePose, 'moveit_mp', callback_group=self.move_js_callback_group)
-        self.make_board_client = self.create_client(
-            Box, '/make_board', callback_group=self.make_board_callback_group)
 
         # making static transform
         self.tf_static_broadcaster = StaticTransformBroadcaster(self)
@@ -122,6 +125,7 @@ class Tags(Node):
         self.robot_board = TransformStamped()
         self.robot_board.header.frame_id = "panda_link0"
         self.robot_board.child_frame_id = "board"
+        self.robot_board.transform.translation.z = -0.9
         self.robot_board.header.stamp = self.get_clock().now().to_msg()
         self.broadcaster.sendTransform(self.robot_board)
 
@@ -141,9 +145,9 @@ class Tags(Node):
             self.get_logger().info(
                 'Move Pose service not available, waiting again...')
 
-        while not self.make_board_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info(
-                'Make Board service not available, waiting again...')
+        # while not self.make_board_client.wait_for_service(timeout_sec=1.0):
+        #     self.get_logger().info(
+        #         'Make Board service not available, waiting again...')
 
     # def goal_reach_sub_callback(self, msg):
     #     if msg == "done":
@@ -240,18 +244,18 @@ class Tags(Node):
         ansT, ansR = await self.future
         ansT1, ansT2 = ansT
         ansR1, ansR2 = ansR
-        while ansT1[0] == 0.0 or ansT2[0] == 0.0:
+        while ansT1[0] == 0.0 and ansT2[0]:
             ansT, ansR = await self.future
             ansT1, ansT2 = ansT
             ansR1, ansR2 = ansR
             # self.get_logger().info(f"{ansT, ansR}")
             self.get_logger().info('value set in service')
         # if ansT[0] != 0.0:
-        Tt1b = np.array([[1, 0, 0, 0.183],
+        Tt1b = np.array([[1, 0, 0, 0.05],
                         [0, 1, 0, 0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
-        Tt2b = np.array([[1, 0, 0, 0.183],
+        Tt2b = np.array([[1, 0, 0, 0.05],
                         [0, 1, 0, -0.05],
                         [0, 0, 1, 0],
                         [0, 0, 0, 1]])
@@ -263,29 +267,47 @@ class Tags(Node):
         Trb = self.mean_transformation_matrices([Trb1, Trb2])
 
         self.boardT = Trb1
-        self.get_logger().info(f'Trb: \n{Trb}')
-        pos, rotation = self.matrix_to_position_quaternion(self.boardT)
+        self.get_logger().info(f'Trb: \n{Trb1}')
+        pos, rotation = self.matrix_to_position_quaternion(Trb1)
         self.get_logger().info(f'Trt: \n{Trt1}')
         self.get_logger().info(f'Trb: \n{Trb}')
         self.robot_board.transform.translation = pos
         self.robot_board.transform.rotation = rotation
 
         # pos, rotation = self.matrix_to_position_quaternion(Trb2)
-        self.get_logger().info(f'Trt: \n{Trt1}')
-        self.get_logger().info(f'Trb: \n{Trb}')
-        p, r = self.matrix_to_position_quaternion(self.boardT, 1)
-        board_pose = Pose()
-        board_pose.position = p
-        board_pose.orientation = r
+        # self.get_logger().info(f'Trt: \n{Trt1}')
+        # self.get_logger().info(f'Trb: \n{Trb}')
 
-        board_request = Box.Request()
-        board_request.pose = board_pose
-        board_request.size = [2.6, 2.2, 0.06]
-        await self.make_board_client.call_async(board_request)
+        # Tt1b_ = np.array([[1, 0, 0, 0.7],
+        #                   [0, 1, 0, 0.5],
+        #                   [0, 0, 1, -0.05],
+        #                   [0, 0, 0, 1]])
+        # Tt2b_ = np.array([[1, 0, 0, 0.7],
+        #                   [0, 1, 0, 0.4],
+        #                   [0, 0, 1, -0.05],
+        #                   [0, 0, 0, 1]])
+        # # Ttb = np.array([0.063,0.063,0,1])
+        # Trt1 = self.array_to_transform_matrix(ansT1, ansR1)
+        # Trt2 = self.array_to_transform_matrix(ansT2, ansR2)
+        # Trb1_ = Trt1 @ Tt1b_
+        # Trb2_ = Trt2 @ Tt2b_
+        # Trb_ = self.mean_transformation_matrices([Trb1_, Trb2_])
+
+        # p, r = self.matrix_to_position_quaternion(Trb_, 1)
+        # board_pose = Pose()
+        # board_pose.position = p
+        # board_pose.orientation = r
+
+        # board_request = Box.Request()
+        # board_request.pose = board_pose
+        # board_request.size = [2.0, 2.2, 0.02]
+        # board_request.name = "board"
+        # # await self.make_board_client.call_async(board_request)
         # self.robot_board_write.transform.translation = pos
         # self.robot_board_write.transform.rotation = rotation
 
         self.state = State.OTHER
+        self.goal_state = "not"
         self.get_logger().info(f'Trb: {pos,rotation}')
 
         self.get_logger().info("calibrate")
@@ -309,8 +331,8 @@ class Tags(Node):
                         [0, 0, 0, 1]])
         Trl = Trb @ Tbl
 
-        x, y = request.x[0] * 0.667, request.y[0] * 0.667
-        z = 0.1
+        x, y = request.x[0], request.y[0]
+        z = 0.12
 
         Tla = np.array([[-0.03948997,  0.99782373,  0.05280484, x],
                         [0.06784999,  0.05540183, -0.99615612,  y],
@@ -329,6 +351,7 @@ class Tags(Node):
 
         for i in range(len(request.x)):
             x, y = request.x[i], request.y[i]
+            self.get_logger().info(f"sanity check:  {x,y}")
             self.get_logger().info(f'x,y : {x,y}')
             z = 0.004 if request.onboard[i] else 0.1
 
@@ -366,9 +389,10 @@ class Tags(Node):
 
         # positive z is out of the board
         if request.into_board:
-            z = ansT[2] + 0.003
+            z = ansT[2] + 0.0013
         else:
-            z = ansT[2] - 0.003
+            z = ansT[2] - 0.002
+
         self.get_logger().info("reached update trajcetory callback")
 
         pose = request.input_pose
@@ -393,7 +417,7 @@ class Tags(Node):
         position, rotation = self.matrix_to_position_quaternion(new_Tra, 1)
         pos.position = position
         pos.orientation = rotation
-
+        # self.boardT[2][3] = z - 0.004
         self.get_logger().info(f"output pose: {pos}")
 
         response.output_pose = pos
@@ -481,13 +505,13 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     async def timer_callback(self):
-        ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
-        self.get_logger().info(f'hand: {ans1T[1]}')
+        # ans1T, ans1R = self.get_transform('board', 'panda_hand_tcp')
+        # self.get_logger().info(f'hand: {ans1T[1]}')
 
         # self.get_logger().info("timmer function")
         if self.state == State.CALIBRATE and self.goal_state == "done":
 
-            self.get_logger().info('function done')
+            # self.get_logger().info('function done')
             ansT1, ansR1 = self.get_transform('panda_link0', 'tag11')
             ansT2, ansR2 = self.get_transform('panda_link0', 'tag12')
             # self.get_logger().info(f'{ansT, ansR}')

@@ -28,7 +28,7 @@
   </node>
 
   <node pkg="drawing" exec="executor" name="Execute"/>
-  <node pkg="drawing" exec="tags" name="tags"/>
-  <node pkg="drawing" exec="kickstart" name="kickstart"/>
+  <!-- <node pkg="drawing" exec="tags" name="tags"/>
+  <node pkg="drawing" exec="kickstart" name="kickstart"/> -->
   
 </launch>

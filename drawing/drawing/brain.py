@@ -7,7 +7,7 @@ from std_msgs.msg import Bool, String
 from matplotlib.font_manager import FontProperties
 from matplotlib.textpath import TextToPath
 # from brain_interfaces.msg import Cartesian
-from brain_interfaces.srv import BoardTiles, MovePose, Cartesian
+from brain_interfaces.srv import BoardTiles, MovePose, Cartesian, Box
 from brain_interfaces.msg import LetterMsg
 # from character_interfaces.alphabet import alphabet
 from geometry_msgs.msg import Pose, Point, Quaternion
@@ -50,6 +50,7 @@ class Brain(Node):
         self.mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
         self.kick_callback_group = MutuallyExclusiveCallbackGroup()
+        self.make_board_callback_group = MutuallyExclusiveCallbackGroup()
 
         # Create clients
         self.board_service_client = self.create_client(
@@ -62,6 +63,8 @@ class Brain(Node):
             Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)  # create custom service type
         self.kickstart_service_client = self.create_client(
             Empty, '/kickstart_service', callback_group=self.kick_callback_group)
+        # self.make_board_client = self.create_client(
+        #     Box, '/make_board', callback_group=self.make_board_callback_group)
 
         while not self.calibrate_service_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Calibrate service not available, waiting...')
@@ -89,7 +92,8 @@ class Brain(Node):
             orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
         )
         self.alphabet = {}
-        self.scale_factor = 0.001
+        self.board_scale = 1.0
+        self.scale_factor = 0.001 * self.board_scale
         self.shape_list = []
         self.current_mp_pose = Pose()
         self.current_traj_poses = []
@@ -112,41 +116,50 @@ class Brain(Node):
                 yvec = []
                 q = 25
                 for t in range(0, q+1):
-                    x = 50*np.cos(2*np.pi*t/q)
-                    y = 50+50*np.sin(2*np.pi*t/q)
-                    xvec.append(x*self.scale_factor)
-                    yvec.append(y*self.scale_factor)
+                    x = 35*np.cos(2*np.pi*t/q)
+                    y = 35+35*np.sin(2*np.pi*t/q)
+                    xvec.append(x*self.scale_factor * self.board_scale)
+                    yvec.append(y*self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xvec, 'ylist': yvec}}
                 self.alphabet.update(point_dict)
             elif letter == '|':  # Body of man
                 xlist = [0.0, 0.0, 0.0]
-                ylist = [0.1, 0.05, 0.002]
+                ylist = [0.1 * self.board_scale, 0.05 *
+                         self.board_scale, 0.002 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '-':  # Arms of man
-                xlist = [0.05, 0.1, 0.15]
-                ylist = [0.05, 0.05, 0.05]
+                xlist = [0.05 * self.board_scale, 0.1 *
+                         self.board_scale, 0.15 * self.board_scale]
+                ylist = [0.05 * self.board_scale, 0.05 *
+                         self.board_scale, 0.05 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '/':  # Leg of man 1
-                xlist = [0.1, 0.075, 0.05]
-                ylist = [0.1, 0.06, 0.02]
+                xlist = [0.1 * self.board_scale, 0.075 *
+                         self.board_scale, 0.05 * self.board_scale]
+                ylist = [0.1 * self.board_scale, 0.06 *
+                         self.board_scale, 0.02 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             elif letter == '_':  # Leg of man 2
-                xlist = [0.0, 0.025, 0.05]
-                ylist = [0.1, 0.06, 0.02]
+                xlist = [0.0 * self.board_scale, 0.025 *
+                         self.board_scale, 0.05 * self.board_scale]
+                ylist = [0.1 * self.board_scale, 0.06 *
+                         self.board_scale, 0.02 * self.board_scale]
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             else:  # All letters of alphabet
-                fp = FontProperties(family="MS Gothic", style="normal")
+                fp = FontProperties(family="Liberation Sans Narrow", style="normal")
                 verts, codes = TextToPath().get_text_path(fp, letters[i])
                 xlist = []
                 ylist = []
                 for j in range(0, len(verts) - 1):
-                    # if verts[j][0] > 0: Commented out because I want to keep the 0,0 for lifting off the board
-                    xlist.append(verts[j][0]*self.scale_factor)
-                    ylist.append(verts[j][1]*self.scale_factor)
+                    if verts[j][0] > 0: #Commented out because I want to keep the 0,0 for lifting off the board
+                        xlist.append(
+                            verts[j][0] * self.scale_factor * self.board_scale)
+                        ylist.append(
+                            verts[j][1] * self.scale_factor * self.board_scale)
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
 
@@ -177,7 +190,7 @@ class Brain(Node):
     #     new_msg = msg
     #     if new_msg == 'done':
     #         # Remove the first instance in the shape list since it was just executed
-    #         self.shape_list.pop[0]
+    #         self.shape_list.pop(0)
     #         # Return to letter writing to see if more things need to be written
     #         self.state = State.LETTER
     #     # else:
@@ -188,10 +201,10 @@ class Brain(Node):
 
         # establishes a global message variable for the duration of the letter state
         self.last_message = msg
-        self.ocr_pub.publish(False)
+        self.ocr_pub.publish(Bool(data=False))
 
         # Turns off the OCR pipeline
-        self.ocr_pub.publish(False)
+        self.ocr_pub.publish(Bool(data=False))
 
         # Turns off the OCR pipeline
         self.ocr_pub.publish(False)
@@ -213,7 +226,7 @@ class Brain(Node):
     def home_callback(self, msg: Bool):
         """Callback for whether or not the robot has returned to home after writing"""
         if msg == True:
-            self.ocr_pub.publish(True)
+            self.ocr_pub.publish(Bool(data=True))
             self.state = State.WRITING
         else:
             self.state = State.WAITING
@@ -226,12 +239,11 @@ class Brain(Node):
 
         self.get_logger().info(f"Pose List for Dash: {pose1}")
         self.get_logger().info(f"Pose List for Dash: {pose_list}")
-        request2 = Cartesian.Request()
-        request2.poses = [pose1]
-        request2.velocity = 0.1
-        request2.replan = False
-        request2.use_force_control = [False]
-        await self.cartesian_mp_service_client.call_async(request2)
+
+        request2 = MovePose.Request()
+        request2.target_pose = pose1
+        request2.use_force_control = False
+        await self.movepose_service_client.call_async(request2)
         self.get_logger().info(f"one done")
 
         request2 = Cartesian.Request()
@@ -251,19 +263,32 @@ class Brain(Node):
         await self.cartesian_mp_service_client.call_async(request3)
         self.get_logger().info(f"all done")
 
-        self.shape_list.pop[0]
+        self.shape_list.pop(0)
 
     async def timer_callback(self):
+
         if self.state == State.INITIALIZE:
+
             # Initializes the kickstart feature then waits for completion
             await self.kickstart_service_client.call_async(request=Empty.Request())
-            # TODO make ocr publisher also home the robot
-            self.ocr_pub.publish(True)
+            # Turns on the OCR because the play has ended and returns to WAITING
+            goal_js = MovePose.Request()
+            # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
+            # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
+            goal_js.target_pose.position = Point(
+                x=0.545029890155533, y=0.05943234468738731, z=0.5893544164237723)
+            goal_js.target_pose.orientation = Quaternion(
+                x=-0.48576480709767544, y=-0.5175973920275, z=-0.4696623291331898, w=0.5249216975367619)
+            goal_js.use_force_control = False
+            ##################### moving to the position####################
+            self.get_logger().info('before moved')
+            await self.movepose_service_client.call_async(goal_js)
+            self.ocr_pub.publish(Bool(data=True))
             self.state = State.WAITING
 
         elif self.state == State.CALIBRATE:
             # Starts calibration then moves to waiting
-            await self.calibrate_service_client.call_async(request=Empty.Request())
+            # await self.calibrate_service_client.call_async(request=Empty.Request())
             self.state = State.LETTER
 
         # elif self.state == State.APPROACHING:
@@ -279,6 +304,13 @@ class Brain(Node):
 
                 # self.state = State.WAITING
             else:
+                request4 = Cartesian.Request()
+                request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
+                    x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
+                request4.velocity = 0.1
+                request4.replan = False
+                request4.use_force_control = [False]
+                await self.cartesian_mp_service_client.call_async(request4)
                 # Turns on the OCR because the play has ended and returns to WAITING
                 goal_js = MovePose.Request()
                 # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
@@ -291,7 +323,7 @@ class Brain(Node):
                 ##################### moving to the position####################
                 self.get_logger().info('before moved')
                 await self.movepose_service_client.call_async(goal_js)
-                self.ocr_pub.publish(True)
+                self.ocr_pub.publish(Bool(data=True))
                 self.state = State.WAITING
 
         elif self.state == State.WAITING:

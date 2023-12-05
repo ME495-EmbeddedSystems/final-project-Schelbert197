@@ -2,6 +2,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
+from geometry_msgs.msg import Pose, Point, Quaternion
+
 from std_srvs.srv import Empty
 from std_msgs.msg import String
 
@@ -60,7 +62,6 @@ class Kickstart(Node):
         while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Carisiam mp  service not available, waiting...')
 
-        
     def cal_state_callback(self, msg):
         self.cal_state = msg
 
@@ -77,7 +78,7 @@ class Kickstart(Node):
         await self.draw_component(1, 2)
         await self.draw_component(1, 3)
         await self.draw_component(1, 4)
-        await self.draw_component(1, 5)
+        # await self.draw_component(1, 5)
 
         # # draw dashes for wrong letters
         await self.draw_component(0, 0)
@@ -99,12 +100,9 @@ class Kickstart(Node):
         dash_on = [True, True, False]
 
         # if mode = 3 then drawing stand
-        stand_x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                   0.0, 0.0, 0.0, 0.01, 0.09, 0.0, 0.0, 0.0]
-        stand_y = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3,
-                   0.35, 0.4, 0.45, 0.0, 0.0, -0.01, -0.05, -0.05]
-        stand_on = [True, True, True, True, True, True, True,
-                    True, True, True, True, True, True, True, False]
+        stand_x = [-0.01, 0.05, 0.05, 0.05]
+        stand_y = [0.05, 0.05, 0.00, 0.00]
+        stand_on = [True, True, True, False]
 
         if mode == 0 or mode == 1:
             # take in mode and position and draw component accordingly
@@ -119,6 +117,8 @@ class Kickstart(Node):
             resp = await self.tile_client.call_async(request)
             pose1 = resp.initial_pose
             pose_list = resp.pose_list
+
+            ##################### moving to the position####################
 
             self.get_logger().info(f"Pose List for Dash: {pose1}")
             self.get_logger().info(f"Pose List for Dash: {pose_list}")
@@ -187,6 +187,14 @@ class Kickstart(Node):
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
             await self.cartesian_client.call_async(request3)
             self.get_logger().info(f"all done")
+
+            # request4 = Cartesian.Request()
+            # request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
+            #     x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
+            # request4.velocity = 0.1
+            # request4.replan = False
+            # request4.use_force_control = [False]
+            # await self.cartesian_client.call_async(request4)
 
 
 def main(args=None):

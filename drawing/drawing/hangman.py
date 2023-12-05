@@ -29,7 +29,7 @@ class Hangman(Node):
         self.guesses_to_fail = 5
         self.current_wrong_guesses = 0
         self.guessed_letters = []
-        self.word_status = ['_', '_', '_', '_', '_', '_']
+        self.word_status = ['_', '_', '_', '_', '_']
         self.game_won = False
         self.user_guess = None
         self.Alphabet = {}
@@ -44,7 +44,7 @@ class Hangman(Node):
 
         # Create Publisher
         self.writer = self.create_publisher(
-            Float64MultiArray, "/writer", qos_profile=10, callback_group=None)
+            LetterMsg, "/writer", qos_profile=10, callback_group=None)
 
         self.create_letters()
         self.pick_words()
@@ -55,7 +55,7 @@ class Hangman(Node):
         letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         for i in range(0, len(letters)):
             letter = letters[i]
-            fp = FontProperties(family="MS Gothic", style="normal")
+            fp = FontProperties(family="DejaVu Sans Mono", style="normal")
             verts, codes = TextToPath().get_text_path(fp, letters[i])
             # print(type(path))
             # print(verts)
@@ -77,10 +77,11 @@ class Hangman(Node):
         words = long_txt.splitlines()
         word_list = []
         for i in range(0, len(words)):
-            if len(words[i]) == 6:
+            if len(words[i]) == 5:
                 word_list.append(words[i])
 
         self.word = word_list[randint(0, len(word_list))].upper()
+        self.get_logger().warn(f"Your word is: {self.word}")
 
     def evaulate_guess(self, guess):
         """Evaluates the guess from the user"""
@@ -121,11 +122,11 @@ class Hangman(Node):
                         mode_list.append(1)
             else:
                 self.get_logger().info('wrong guess')
-                self.guessed_letters.append(upper_guess)
                 # write wrong letter
                 letter_list.append(upper_guess)
                 mode_list.append(0)
                 position_list.append(len(self.guessed_letters))
+                self.guessed_letters.append(upper_guess)
                 # write hangman
                 letter_list.append(self.man_list[self.current_wrong_guesses])
                 mode_list.append(2)
