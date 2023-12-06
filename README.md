@@ -69,7 +69,8 @@ a force control system combined with the use of april tags to regulate the pen's
 
 The following diagram illustrates the overall system design and showcases how different nodes interact with eachother in order to accomplish the goals of our project.
 
-![Alt text](Node_diagram.jpg)
+![Node_diagram](https://github.com/ME495-EmbeddedSystems/final-project-Schelbert197/assets/42013894/cb9bc600-ac66-48a0-a4ba-3c6fecbadffb)
+
 
 ## Lessons Learned
 1. OCR:
@@ -122,12 +123,29 @@ Our final stretch goal that we would love to improve our project with is changin
 The following video showcases a full runthrough of our project. In it, we demonstrate the robot's ability to calibrate and determine the position of the board, run through the game setup sequence while using force control, and interact with the player and receive both single letter and full word guesses.
 
 
+https://github.com/ME495-EmbeddedSystems/final-project-Schelbert197/assets/42013894/af983234-3d1a-4324-a0dd-5fc7fe0ac564
+
+
+
 The following two videos closely demonstrate the OCR system and how player guesses are seen by the robot. 
 
 Single letter guess:
 
 
+
+https://github.com/ME495-EmbeddedSystems/final-project-Schelbert197/assets/42013894/965553e4-c708-4cb2-b783-d9acb4766dec
+
+
+
 Full word guess:
+
+
+
+https://github.com/ME495-EmbeddedSystems/final-project-Schelbert197/assets/42013894/7115d28a-5bdc-46f7-aa1c-d1eefa33c17c
+
+
+
+
 
 
 
