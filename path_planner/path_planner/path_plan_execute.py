@@ -407,7 +407,7 @@ class Path_Plan_Execute():
             self.node.get_logger().info("here2")
 
             self.send_goal_future = self.movegroup_client.send_goal_async(
-                movegroup_goal_msg,SUBSCRIBERS
+                movegroup_goal_msg,
                 self.movegroup_goal_response_callback)
         else:
             self.node.get_logger().error("Given pos is invalid")
