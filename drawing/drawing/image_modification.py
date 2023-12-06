@@ -1,3 +1,20 @@
+"""
+Modifies images for OCR using opencv.
+
+Subscribers
+----------
+    ocr_run: std_msgs/msg/Bool - Value used to switch states of the system
+    camera/color/image_raw: sensor_msgs/msg/Image - RGB image obtained from
+    the camera
+
+Publishers
+----------
+    modified_image_1: sensor_msgs/msg/Image - Modified image for word
+    recognition
+    modified_image_2: sensor_msgs/msg/Image - Modified image for character
+    recognition
+"""
+
 import rclpy
 from rclpy.node import Node
 from enum import Enum, auto
@@ -6,34 +23,54 @@ import numpy as np
 import imutils
 from imutils.perspective import four_point_transform
 
-from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
 
+
 class State(Enum):
+    """
+    Current state of the system.
+
+    Determines if image modification is running.
+    """
+
     START = (auto(),)  # start image modification
     STOPPED = (auto(),)  # stop image modification
 
+
 def nothing(x):
-    """Callback for trackbars"""
+    """Trackbar callback."""
     pass
 
+
 def kernel(x):
-    """Callback for kernel trackbar"""
+    """
+    Kernel trackbar callback.
+
+    Ensure that the step size is 2.
+    """
     if x % 2 == 0:
-        x = x + 1 # ensure that the value is odd
+        x = x + 1  # ensure that the value is odd
     cv2.setTrackbarPos('Kernel', 'Parameters', x)
 
+
 def kernel_cropped(x):
-    """Callback for kernel_cropped trackbar"""
+    """
+    Kernel trackbar callback.
+
+    Ensure that the step size is 2.
+    """
     if x % 2 == 0:
-        x = x + 1 # ensure that the value is odd
+        x = x + 1  # ensure that the value is odd
     cv2.setTrackbarPos('Kernel_Cropped', 'Parameters', x)
 
+
 class ImageModification(Node):
+    """This node modifies images for OCR using opencv."""
+
     def __init__(self):
         super().__init__("image_modification")
 
@@ -41,20 +78,26 @@ class ImageModification(Node):
         self.cv_bridge = CvBridge()
 
         # create subscriber to set state
-        self.game_state = self.create_subscription(Bool, "/ocr_run", self.game_state_callback, qos_profile=10)
+        self.game_state = self.create_subscription(
+            Bool, "/ocr_run", self.game_state_callback, qos_profile=10)
         # create subscriber to get image
-        self.cap = self.create_subscription(Image, "camera/color/image_raw", self.image_modification, qos_profile=10)
+        self.cap = self.create_subscription(
+            Image, "camera/color/image_raw",
+            self.image_modification, qos_profile=10)
 
         # create publisher to publish modified image
-        self.modified_image_1_publish = self.create_publisher(Image, "modified_image_1", 10)
-        self.modified_image_2_publish = self.create_publisher(Image, "modified_image_2", 10)
+        self.modified_image_1_publish = self.create_publisher(
+            Image, "modified_image_1", 10)
+        self.modified_image_2_publish = self.create_publisher(
+            Image, "modified_image_2", 10)
 
         # create trackbars to tune cv parameters
         cv2.namedWindow('Parameters')
         cv2.createTrackbar('Canny_T_min', 'Parameters', 0, 255, nothing)
         cv2.createTrackbar('Canny_T_max', 'Parameters', 0, 255, nothing)
         cv2.createTrackbar('Kernel', 'Parameters', 1, 31, kernel)
-        cv2.createTrackbar('Kernel_Cropped', 'Parameters', 1, 31, kernel_cropped)
+        cv2.createTrackbar('Kernel_Cropped', 'Parameters',
+                           1, 31, kernel_cropped)
         cv2.createTrackbar('Dilate_Kernel', 'Parameters', 1, 30, nothing)
 
         # set default trackbar positions
@@ -68,6 +111,7 @@ class ImageModification(Node):
         self.state = State.STOPPED
 
     def game_state_callback(self, msg):
+        """Toggles the state of the system."""
         if msg.data:
             self.state = State.START
             # self.get_logger().info("Starting")
@@ -78,7 +122,7 @@ class ImageModification(Node):
             cv2.destroyWindow('image')
 
     def image_modification(self, msg):
-        """Pre-process the image for OCR"""
+        """Pre-process the image for OCR."""
         if self.state == State.START:
             # convert image to opencv format
             self.frame = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -109,7 +153,7 @@ class ImageModification(Node):
             # find contours in the edge map, then sort them by their
             # size in descending order
             cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL,
-                cv2.CHAIN_APPROX_SIMPLE)
+                                    cv2.CHAIN_APPROX_SIMPLE)
             cnts = imutils.grab_contours(cnts)
             cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
             displayCnt = None
@@ -119,48 +163,50 @@ class ImageModification(Node):
                 # approximate the contour
                 peri = cv2.arcLength(c, True)
                 approx = cv2.approxPolyDP(c, 0.01 * peri, True)
-                # if the contour has four vertices identify it as the whiteboard
+                # if the contour has four vertices
+                # identify it as the whiteboard
                 if len(approx) == 4:
                     displayCnt = approx
-                    cv2.drawContours(resized_image, [displayCnt], 0, (0, 255, 0), 2)
+                    cv2.drawContours(
+                        resized_image, [displayCnt], 0, (0, 255, 0), 2)
                     break
 
             # display captured frame with drawn contour
             cv2.imshow("image", resized_image)
 
-            # extract the bounded whiteboard region and apply a perspective transform
+            # extract the bounded whiteboard region and
+            # apply a perspective transform
             try:
                 # apply 4 point transform on the contour in the grayscale image
                 warped = four_point_transform(gray, displayCnt.reshape(4, 2))
                 # cv2.imshow("warped", warped)
 
                 # crop the borders of the image to remove inconsistencies
-                height,width = warped.shape
-                border = int(0.05*min(height,width))
+                height, width = warped.shape
+                border = int(0.05*min(height, width))
                 x1 = border
                 y1 = border
                 x2 = width - border
                 y2 = height - border
-                cropped = warped[y1:y2,x1:x2]
+                cropped = warped[y1:y2, x1:x2]
 
                 # blur the cropped image
                 cropped = cv2.GaussianBlur(cropped, (k_size_2, k_size_2), 0)
 
                 # inv binarise the blurred image
-                bin_thresh = cv2.getTrackbarPos('Bin_Thresh', 'Parameters')
-                # ret3, binarised = cv2.threshold(cropped, bin_thresh, 255, cv2.THRESH_BINARY_INV)
-                # ret3,binarised = cv2.threshold(warped,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-                binarised = cv2.adaptiveThreshold(cropped,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY_INV,7,2)
+                binarised = cv2.adaptiveThreshold(
+                    cropped, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                    cv2.THRESH_BINARY_INV, 7, 2)
                 # cv2.imshow("binarised", binarised)
 
                 # dilate the image to widen letter strokes
-                kernel = np.ones((d_k_size, d_k_size),np.uint8)
-                dilation = cv2.dilate(binarised,kernel,iterations = 1)
+                kernel = np.ones((d_k_size, d_k_size), np.uint8)
+                dilation = cv2.dilate(binarised, kernel, iterations=1)
 
                 # invert the inv dilated image
                 inverted_image = cv2.bitwise_not(dilation)
                 # cv2.imshow("Letter_Recognition", inverted_image)
-                
+
                 # invert the inv binarised image
                 binary_image = cv2.bitwise_not(binarised)
                 # cv2.imshow("Word_Recognition", binary_image)
@@ -172,7 +218,6 @@ class ImageModification(Node):
                 cv2.resizeWindow('Recognition', 400, 290)
 
                 # display modified image
-                # cv2.imshow("Recognition", imutils.resize(binary_image, height=200))
                 cv2.imshow("Recognition", binary_image)
 
                 # convert images to msg format and publish
@@ -181,7 +226,7 @@ class ImageModification(Node):
                 img_publish_2 = self.cv_bridge.cv2_to_imgmsg(inverted_image)
                 self.modified_image_2_publish.publish(img_publish_2)
 
-            except:
+            except Exception:
                 pass
 
             cv2.waitKey(30)
