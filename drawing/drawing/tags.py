@@ -199,7 +199,8 @@ class Tags(Node):
         Trb = self.boardT
         lx, ly = self.grid.grid_to_world(request.mode, request.position)
         Tbl = np.array(
-            [[1, 0, 0, lx * 0.667], [0, 1, 0, ly * 0.667], [0, 0, 1, 0], [0, 0, 0, 1]]
+            [[1, 0, 0, lx * 0.667], [0, 1, 0, ly * 0.667], [0, 0, 1, 0],
+             [0, 0, 0, 1]]
         )
         Trl = Trb @ Tbl
 
@@ -297,7 +298,7 @@ class Tags(Node):
         Trb = self.boardT
         Tba = mr.TransInv(Trb) @ Tra
         new_Tba = Tba
-        # new_Tba[2, 3] = z
+        new_Tba[2, 3] = z
         new_Tra = Trb @ new_Tba
         pos = Pose()
         position, rotation = matrix_to_position_quaternion(new_Tra, 1)
