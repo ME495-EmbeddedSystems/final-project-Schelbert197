@@ -25,7 +25,9 @@ class State(Enum):
 
     Create the states of the node to determine what the timer
     fcn should be doing (PLAYING, WAITING, OR GAME_OVER).
+
     """
+
     PLAYING = auto(),
     GAME_OVER = auto(),
     WAITING = auto()
@@ -36,7 +38,7 @@ class Hangman(Node):
 
     def __init__(self):
         super().__init__("hangman")
-        """Initialize the game vars and other stuff"""
+        """Initialize the game vars and other characters."""
 
         self.state = State.WAITING
         self.word = "BABIES"
@@ -63,7 +65,7 @@ class Hangman(Node):
         self.pick_words()
 
     def pick_words(self):
-        """Randomly chooses a 6 letter word"""
+        """Randomly chooses a 6 letter word."""
 
         word_url = "https://www.mit.edu/~ecprice/wordlist.10000"
         response = urllib.request.urlopen(word_url)
@@ -77,7 +79,7 @@ class Hangman(Node):
         self.word = word_list[randint(0, len(word_list))].upper()
 
     def evaulate_guess(self, guess):
-        """Evaluates the guess from the user"""
+        """Evaluates the guess from the user."""
 
         upper_guess = guess.upper()
         letter_list = []
@@ -133,15 +135,26 @@ class Hangman(Node):
                          mode=mode_list, letters=letter_list)
 
     def show_progress(self):
-        """Shows the game progress"""
+        """Shows the game progress."""
         self.get_logger().info(
             f"Guessed wrong letters: {self.guessed_letters}")
         self.get_logger().info(f"Word Status: {self.word_status}")
         self.get_logger().info(f"Wrong guesses: {self.current_wrong_guesses}")
 
     def send_letter(self, letters, positions, mode):
-        """Publishes the list of points that define the letter to
-        the ros topic for the franka to read"""
+        """
+        Send Letter.
+
+        Publishes the list of points that define the letter to
+        the ros topic for the franka to read.
+
+        Args:
+        ----
+        letters (List) : The guessed letter.
+        positions (List) : The positions within their array.
+        mode (List) : The mode or list the letter object populates.
+
+        """
         letter_to_send = LetterMsg()
         letter_to_send.positions = positions
         letter_to_send.letters = letters
@@ -149,7 +162,20 @@ class Hangman(Node):
         self.writer.publish(letter_to_send)
 
     def check_word(self):
-        """Checks the guessed word"""
+        """
+        Check word.
+
+        Checks the guessed word against the answer.
+
+        Args:
+        ----
+        None
+
+        Returns:
+        -------
+        (Bool): A True or False correctness value.
+
+        """
         player_word = ''.join(self.word_status)
         if player_word == self.word:
             self.game_won = True
@@ -159,13 +185,12 @@ class Hangman(Node):
             return False
 
     def user_input_callback(self, msg: String):
-        """Callback for the user input subscriber (check prompt user)"""
+        """Callback for the user input subscriber."""
         self.user_guess = msg.data
         self.get_logger().info(f"Message: {self.user_guess}")
-        # self.evaulate_guess(self.user_guess)
 
     def timer_callback(self):
-        """Timer callback for the game to play hangman (check play game)"""
+        """Timer callback for the game to play hangman."""
         if self.state == State.PLAYING:
             self.evaulate_guess(self.user_guess)
             if self.current_wrong_guesses < self.guesses_to_fail:
@@ -197,13 +222,9 @@ class Hangman(Node):
         if self.state == State.GAME_OVER:
             pass
 
-# test = Hangman()
-
-# test.play_game()
-
 
 def main(args=None):
-    """ The node's entry point """
+    """The node's entry point"""
     rclpy.init(args=args)
     node = Hangman()
     rclpy.spin(node)

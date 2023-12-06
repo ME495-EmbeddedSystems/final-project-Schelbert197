@@ -35,13 +35,14 @@ class State(Enum):
     Create the states of the node to determine what the timer
     fcn should be doing (PLAYING, WAITING, OR GAME_OVER).
     """
+
     INITIALIZE = auto(),
     WAITING = auto(),
     LETTER = auto()
 
 
 class Brain(Node):
-    """Controls the nodes required to play Hang,man."""
+    """Controls the nodes required to play Hangman."""
 
     def __init__(self):
         super().__init__("brain")
@@ -104,8 +105,7 @@ class Brain(Node):
         self.create_letters()
 
     def create_letters(self):
-        """Create the dictionary of bubble letters"""
-
+        """Create the dictionary of bubble letters."""
         letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0|-/_'
         for i in range(0, len(letters)):
             letter = letters[i]
@@ -164,15 +164,15 @@ class Brain(Node):
 
     def process_letter_points(self, letter):
         """
-        Prepare the letter points
+        Prepare the letter points.
 
-        Function to make it easier to prepare letters for board tile type
+        Function to make it easier to prepare letters for board tile type.
 
         Args:
         ----
         letter (String) : The character to be written on the board
 
-        Returns:
+        Returns
         -------
         board_x (List) : The list of x points on the board plane
         board_y (List) : The list of y points on the board plane
@@ -201,8 +201,14 @@ class Brain(Node):
         return board_x, board_y, board_bool
 
     def hangman_callback(self, msg: LetterMsg):
-        """Callback when feedback is given from hangman"""
+        """
+        Call back when feedback is given from hangman.
 
+        Args:
+        ----
+        msg (LetterMsg) : The character with postion to be written on the board
+
+        """
         # establishes a global message variable for the duration of LETTER
         self.last_message = msg
         self.ocr_pub.publish(Bool(data=False))
@@ -225,7 +231,16 @@ class Brain(Node):
         self.state = State.LETTER
 
     async def letter_writer(self, shape: BoardTiles.Request()):
-        """Function to process the shape into trajectory service calls"""
+        """
+        Write the letters on the board.
+
+        Function to process the shape into trajectory service calls.
+
+        Args:
+        ----
+        shape (BoardTiles.Request()) : The poses in BoardTiles form
+
+        """
         resp = await self.board_service_client.call_async(shape)
         pose1 = resp.initial_pose
         pose_list = resp.pose_list
@@ -252,7 +267,7 @@ class Brain(Node):
         self.shape_list.pop(0)
 
     async def timer_callback(self):
-        """Timer running at a specified frequency"""
+        """Timer running at a specified frequency."""
         if self.state == State.INITIALIZE:
             # Initializes the kickstart feature then waits for completion
             await self.kickstart_client.call_async(request=Empty.Request())
@@ -304,7 +319,7 @@ class Brain(Node):
 
 
 def main(args=None):
-    """ The node's entry point """
+    """Node's entry point."""
     rclpy.init(args=args)
     brain = Brain()
     rclpy.spin(brain)
