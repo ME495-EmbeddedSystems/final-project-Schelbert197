@@ -1,15 +1,32 @@
 """
 Allow user to manipulate a robot.
 
-Interfaces with the node and the robot to allow the user to manipulate
+Interface with the node and the robot to allow the user to manipulate
 the robot using the move group and action clients.
-PUBLISHERS:
+
+Services:
+    none
+
+Clients:
+  + compute_fk (GetPositionFK) - Calls the FK service for forward kinematics.
+  + compute_ik (GetPositionIK) - Calls the IK service for inverse kinemetics.
+  + compute_cartesian_path (GetCartesianPath) - Calls a service to compute a
+  cartesian path.
+
+Actions:
+  + move_action (MoveGroup) - The action for asking MoveIT to plan non-
+  cartesian paths.
+  + panda_gripper/homing (Homing) - The action for homing the panda gripper.
+  + panda_gripper/grasp (Grasp) - The action for grasping with the panda
+  gripper.
+
+Publishers:
   + /collision object (CollisionObject) - The collision box representing the
   table
-SERVICES:
-    none
-PARAMETERS:
-    none
+
+Subscribers:
+  + /joint_states (JointState) - The current joint state of the robot.
+
 """
 
 from rclpy.action import ActionClient
@@ -19,18 +36,19 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from std_msgs.msg import Header
 
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import (JointConstraint, Constraints, OrientationConstraint,
-                             PlanningScene, PlanningOptions, RobotState,
-                             MotionPlanRequest, WorkspaceParameters, PositionIKRequest,
-                             CollisionObject)
 from moveit_msgs.srv import GetPositionIK, GetPositionFK, GetCartesianPath
+from moveit_msgs.msg import (JointConstraint, Constraints,
+                             OrientationConstraint, PlanningScene,
+                             PlanningOptions, RobotState,
+                             MotionPlanRequest, WorkspaceParameters,
+                             PositionIKRequest, CollisionObject)
 
 from geometry_msgs.msg import Vector3, Quaternion
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 
 from franka_msgs.action import Homing, Grasp
-from moveit_msgs.msg import CollisionObject
+
 from shape_msgs.msg import SolidPrimitive
 
 
@@ -43,10 +61,14 @@ class Path_Plan_Execute():
         Initialize an instance of a facilitator class that provides the
         functions utilized by the node.
 
-        Args:
+        Args
         ----
-        node: The ros2 node passed into the class that inherits its
+        node (Node): The ros2 node passed into the class that inherits its
         features.
+
+        Returns
+        -------
+        None
 
         """
         self.node = node
@@ -57,18 +79,20 @@ class Path_Plan_Execute():
         self.ik_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_callback_group = MutuallyExclusiveCallbackGroup()
         self.movegroup_callback_group = MutuallyExclusiveCallbackGroup()
-        self.executetrajectory_callback_group = MutuallyExclusiveCallbackGroup()
+        self.executetrajectory_callback_group = \
+            MutuallyExclusiveCallbackGroup()
 
-        ########### create subscribers ############
-
+        # create subscribers
         self.joint_states_subs = self.node.create_subscription(
-            JointState, '/joint_states', self.joint_states_callback, 10, callback_group=self.joint_states_callback_group)
+            JointState, '/joint_states', self.joint_states_callback, 10,
+            callback_group=self.joint_states_callback_group)
         self.current_joint_state = JointState()
 
-        ########### create action clients ###########
+        # create action clients
 
-        self.movegroup_client = ActionClient(self.node, MoveGroup,
-                                             'move_action', callback_group=self.movegroup_callback_group)
+        self.movegroup_client = ActionClient(
+            self.node, MoveGroup, 'move_action',
+            callback_group=self.movegroup_callback_group)
         self.node.gripper_homing_client = ActionClient(
             self.node, Homing, 'panda_gripper/homing')
         self.node.gripper_grasping_client = ActionClient(
@@ -80,7 +104,7 @@ class Path_Plan_Execute():
                 timeout_sec=2):
             self.gripper_available = False
 
-        ########## create service clients ###########
+        # create service clients
         self.fk_client = self.node.create_client(
             GetPositionFK, 'compute_fk', callback_group=self.fk_callback_group)
 
@@ -88,7 +112,8 @@ class Path_Plan_Execute():
             GetPositionIK, 'compute_ik', callback_group=self.ik_callback_group)
 
         self.cartesian_path_client = self.node.create_client(
-            GetCartesianPath, 'compute_cartesian_path', callback_group=self.cartesian_callback_group)
+            GetCartesianPath, 'compute_cartesian_path', callback_group=self.
+            cartesian_callback_group)
 
         # wait for the clients' services to be available
         while not self.ik_client.wait_for_service(timeout_sec=1.0):
@@ -108,19 +133,6 @@ class Path_Plan_Execute():
         self.goal_joint_state = None
         self.planned_trajectory = None
 
-        # i want to remove the commented lines below, but i'm not sure
-        # if it will break things. Leaving them here until I can confirm
-        # we don't need them
-        # self.cartesian_trajectory_error_code = MoveItErrorCodes()
-        # self.cartesian_trajectory_error_code.val = 0
-
-        # self.fk_error_code = MoveItErrorCodes()
-        # self.fk_error_code = 0
-
-        # this is for the box. i know we want to keep the box in rviz
-        # for some reason, but i've already removed it. I'll just leave
-        # this function here for now so that in the future i dont' ahve to
-        # add it back anyway.
         self.planning_scene_publisher = self.node.create_publisher(
             CollisionObject,
             '/collision_object',
@@ -132,10 +144,21 @@ class Path_Plan_Execute():
         self.current_joint_state = msg
 
     def create_movegroup_msg(self, movegroup_goal_msg):
+        """
+        Create a movegroup message for trajectory planning.
 
-        # we had previously split this all up into like four
-        # different functions.
+        Create a movegroup message and populate it with the correct
+        planning parameters for the moveit motion planner.
 
+        Args
+        ----
+        movegroup_goal_msg (MoveGroup): An unpopulated MoveGroup action object.
+
+        Returns
+        -------
+        movegroup_goal_msg (MoveGroup): A populated MoveGroup action object.
+
+        """
         self.node.get_logger().info("Initial Set")
         # set up the message
         movegroup_goal_msg.request = MotionPlanRequest(
@@ -171,9 +194,7 @@ class Path_Plan_Execute():
             )
         )
 
-        ######################################
-        ######### set the goal constraints#####
-        ######################################
+        # set the goal constraint
         joint_constraints = []
 
         # dynamically create the goal constraints based on the size of the
@@ -207,10 +228,11 @@ class Path_Plan_Execute():
         constraints = Constraints()
         constraints.orientation_constraints = [orientation_constraint]
 
-        movegroup_goal_msg.request.trajectory_constraints.constraints = [Constraints(
-            name='',
-            orientation_constraints=[orientation_constraint]
-        )]
+        movegroup_goal_msg.request.trajectory_constraints.constraints = [
+            Constraints(
+                name='',
+                orientation_constraints=[orientation_constraint]
+            )]
 
         # set the planning options
         movegroup_goal_msg.planning_options = PlanningOptions(
@@ -236,9 +258,15 @@ class Path_Plan_Execute():
         to a position defined by the user and tell the IK service
         to computer the joint states required to do so.
 
-        Args:
+        Args
         ----
-        None
+        pose (Pose): A Pose object representing the robot's desired end-
+        effector position.
+        joint_state: The current joint state of the robot.
+
+        Returns
+        -------
+        result: The result of the ik service callback.
 
         """
         request = GetPositionIK.Request()
@@ -273,8 +301,14 @@ class Path_Plan_Execute():
         Set the desired goal orientation for the robot arm using the
         IK service.
 
-        Args:
+        Args
         ----
+        pose (Pose): A Pose object representing the robot's desired
+        end-effector
+        position.
+
+        Returns
+        -------
         None
 
         """
@@ -284,17 +318,24 @@ class Path_Plan_Execute():
         self.goal_joint_state = result.solution.joint_state
 
     async def plan_cartesian_path(self, queue, velocity=0.025):
-        # orientation_constraint = OrientationConstraint()
-        # orientation_constraint.header = Header(
-        #     stamp=self.node.get_clock().now().to_msg())
-        # orientation_constraint.orientation = Quaternion(
-        #     x=1.0, y=0.0, z=0.0, w=0.0)
-        # orientation_constraint.link_name = 'panda_hand_tcp'
-        # orientation_constraint.absolute_x_axis_tolerance = 0.1
-        # orientation_constraint.absolute_y_axis_tolerance = 0.1
-        # orientation_constraint.absolute_z_axis_tolerance = 0.1
-        # orientation_constraint.weight = 1.0
+        """
+        Plan a cartesian path.
 
+        Create a GetCartesianPath.Request() object, and then populate it
+        with the desired parameters for cartesian motion.
+
+        Args
+        ----
+        queue (Pose[]): A list of Pose messages that you would like the robot
+        end-effector to travel to.
+        velocity (float): The velocity at which the end-effector should move
+        during execution.
+
+        Returns
+        -------
+        None
+
+        """
         self.cartesian_path_request = GetCartesianPath.Request()
 
         self.cartesian_path_request.header = Header(
@@ -309,37 +350,32 @@ class Path_Plan_Execute():
             is_diff=False
         )
 
-        # leave the commented out lines below here for now
-        # they may come in handy later as we continue to debug
         self.cartesian_path_request.group_name = self.node.group_name
         self.cartesian_path_request.waypoints = queue
         self.cartesian_path_request.link_name = 'panda_hand_tcp'
-        # setting this to 0.1 for now, could cause problems later
         self.cartesian_path_request.max_step = 0.01
-        # self.cartesian_path_request.jump_threshold = 0
-        # self.cartesian_path_request.prismatic_jump_threshold = 0
-        # self.cartesian_path_request.revolute_jump_threshold = 0
         self.cartesian_path_request.avoid_collisions = True
         self.cartesian_path_request.max_velocity_scaling_factor = velocity
         self.cartesian_path_request.max_acceleration_scaling_factor = 0.05
-        # self.cartesian_path_request.path_constraints.orientation_constraint = []
-        # self.node.get_logger().info(f"request: {self.cartesian_path_request}")
 
-        cartesian_trajectory_result = await self.cartesian_path_client.call_async(self.cartesian_path_request)
+        cartesian_trajectory_result = await self.cartesian_path_client.\
+            call_async(self.cartesian_path_request)
 
-        # self.node.get_logger().info(
-        #     f"result: {cartesian_trajectory_result}")
-        self.cartesian_trajectory_start_state = cartesian_trajectory_result.start_state
-        # this is the trajectory we will execute
-        self.cartesian_trajectory_solution = cartesian_trajectory_result.solution
-        # fraction of the path the was computed (number of waypoints traveled through)
-        self.cartesian_trajectory_fraction = cartesian_trajectory_result.fraction
-        self.cartesian_trajectory_error_code = cartesian_trajectory_result.error_code
+        self.cartesian_trajectory_start_state = cartesian_trajectory_result.\
+            start_state
+        self.cartesian_trajectory_solution = cartesian_trajectory_result.\
+            solution
+        self.cartesian_trajectory_fraction = cartesian_trajectory_result.\
+            fraction
+        self.cartesian_trajectory_error_code = cartesian_trajectory_result.\
+            error_code
 
         self.node.get_logger().info(
-            f"{self.cartesian_trajectory_fraction * 100}% of the path was computed!")
+            f"{self.cartesian_trajectory_fraction * 100}% of the path was \
+                computed!")
         self.node.get_logger().info(
-            f"cartesian_trajectory error code: {self.cartesian_trajectory_error_code}")
+            f"cartesian_trajectory error code: \
+                {self.cartesian_trajectory_error_code}")
 
         self.planned_trajectory = self.cartesian_trajectory_solution
 
@@ -351,10 +387,13 @@ class Path_Plan_Execute():
         parameters, and calls the movegroup_client asynchronously to calculate
         a valid path if possible.
 
-        Args:
+        Args
         ----
-        request (int) : a dummy callback variable
-        response (int) : a dummy response variable
+        None
+
+        Returns
+        -------
+        None
 
         """
         self.movegroup_status = GoalStatus.STATUS_UNKNOWN
@@ -368,9 +407,7 @@ class Path_Plan_Execute():
             self.node.get_logger().info("here2")
 
             self.send_goal_future = self.movegroup_client.send_goal_async(
-                movegroup_goal_msg,
-                feedback_callback=self.feedback_callback)
-            self.send_goal_future.add_done_callback(
+                movegroup_goal_msg,SUBSCRIBERS
                 self.movegroup_goal_response_callback)
         else:
             self.node.get_logger().error("Given pos is invalid")
@@ -382,10 +419,13 @@ class Path_Plan_Execute():
         Provide a future result on the callback for async planning,
         executing, and planning and executing.
 
-        Args:
+        Args
         ----
-        future (result) : the future object from the send_goal_future
-        function
+        future (Future): the future object from the send_goal_future function.
+
+        Returns
+        -------
+        None
 
         """
         self.goal_handle = future.result()
@@ -406,10 +446,14 @@ class Path_Plan_Execute():
 
         Provide a future result on the movegroup goal response callback.
 
-        Args:
+        Args
         ----
         future (result) : the future object from the
         movegroup_goal_response_callback function
+
+        Returns
+        -------
+        None
 
         """
         self.movegroup_result = future.result().result
@@ -419,19 +463,27 @@ class Path_Plan_Execute():
             f"movegroup_result: {self.movegroup_status}")
 
         self.planned_trajectory = self.movegroup_result.planned_trajectory
-        # self.node.get_logger().info(
-        #     f"currentjointstate: {self.current_joint_state}")
-        # self.node.get_logger().info(
-        #     f"plannedtrajectory: {self.planned_trajectory}")
-
         self.node.get_logger().info("Trajectory Planned!")
 
     def execute_individual_trajectories(self):
+        """
+        Reorganize a list of joint trajectories.
 
+        Manipulate the RobotTrajectory message returned from either the
+        MoveGroup motion planner or the Cartesian motion planner into a
+        discrete list of joint trajectories to execute one by one.
+
+        Args
+        ----
+        None
+
+        Returns
+        -------
+        joint_trajectories (JointTrajectory[]): A list of JointTrajectory
+        objects to be executed.
+
+        """
         joint_trajectories = []
-
-        # self.node.get_logger().info(
-        #     f"planned trajectory: {self.planned_trajectory}")
 
         for point in self.planned_trajectory.joint_trajectory.points:
             temp = JointTrajectoryPoint()
@@ -439,9 +491,10 @@ class Path_Plan_Execute():
             temp.velocities = point.velocities
             temp.accelerations = point.accelerations
             temp.effort = point.effort
-            temp.time_from_start.nanosec = 100000000
+            temp.time_from_start.nanosec = 100000000  # 0.1 seconds
             joint_trajectory = JointTrajectory()
-            joint_trajectory.joint_names = self.planned_trajectory.joint_trajectory.joint_names
+            joint_trajectory.joint_names = self.planned_trajectory.\
+                joint_trajectory.joint_names
             joint_trajectory.points = [temp]
 
             joint_trajectories.append(joint_trajectory)
@@ -455,27 +508,35 @@ class Path_Plan_Execute():
         Provide a future result message on the feedback from the
         execute_path() and plan_and_execute() functions.
 
-        Args:
+        Args
         ----
-        feedback_msg (result) : the response object from the async
+        feedback_msg (Feedback): the response object from the async
         execution call
+
+        Returns
+        -------
+        None
 
         """
         feedback = feedback_msg.feedback
         self.node.get_logger().info(f"Received Feedback: {feedback}")
 
-    def set_goal_pose(self, point):
+    def set_goal_pose(self, pose):
         """
         Set desired goal position.
 
         Set the desired goal position for the robot arm.
 
-        Args:
+        Args
         ----
-        point (Point) : The goal cartesian point of the end effector
+        pose (Pose): The goal cartesian pose of the end effector
+
+        Returns
+        -------
+        None
 
         """
-        self.goal_pose = point
+        self.goal_pose = pose
         self.goal_orientation = Quaternion(x=0.0, y=1.0, z=0.0, w=0.0)
 
     def set_goal_orientation(self, orientation):
@@ -485,9 +546,13 @@ class Path_Plan_Execute():
         Set the desired goal orientation for the robot arm. This
         function is used in the picker node.
 
-        Args:
+        Args
         ----
         orientation (Quaternion) : The orientation of the end effector
+
+        Returns
+        -------
+        None
 
         """
         self.goal_orientation = orientation
@@ -499,12 +564,16 @@ class Path_Plan_Execute():
         Add a box to the rviz scene representing the table that the robot
         is grabbing objects off of.
 
-        Args:
+        Args
         ----
         box_id (string) : the id of the box
         frame_id (string) : the id of the box's frame
         dimensions (list) : the lengths of the edges of the box
         pose (list) : the cartesian coordinates of the box origin
+
+        Returns
+        -------
+        None
 
         """
         collision_object = CollisionObject()
