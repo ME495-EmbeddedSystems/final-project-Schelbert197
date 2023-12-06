@@ -169,7 +169,7 @@ class Brain(Node):
         """
         Prepare the letter points.
 
-        Function to make it easier to prepare letters for board tile type.Ar
+        Function to make it easier to prepare letters for board tile type.
         letter (String) : The character to be written on the board
 
         Returns

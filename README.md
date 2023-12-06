@@ -8,9 +8,12 @@ In order to accomplish our project's core goals, we developed:
 a force control system combined with the use of april tags to regulate the pen's distance from the board, an OCR system to gather and use information from the human player, and a hangman system to mediate the entire game.
 
 ## Quickstart Guide - Running the Game on the Robot
-1. SSH into the student@station computer from the terminal after you are connected to the robot via ethernet cable.
-2. On your browser open https://panda0.robot, unlock the robot, and activate FCI
-3. Once the robot is unlocked and has a blue light, use `ros2 launch drawing game_time.launch.xml` to open RVIZ and start the hangman game on the robot.
+1. Install PaddlePaddle using `python -m pip install paddlepaddle-gpu -i https://pypi.tuna.tsinghua.edu.cn/simple`
+2. Install paddleocr using `pip install "paddleocr>=2.0.1" # Recommend to use version 2.0.1+`
+3. Install Imutils using `pip install imutils`
+4. SSH into the student@station computer from the terminal after you are connected to the robot via ethernet cable.
+5. On your browser open https://panda0.robot, unlock the robot, and activate FCI
+6. Once the robot is unlocked and has a blue light, use `ros2 launch drawing game_time.launch.xml` to open RVIZ and start the hangman game on the robot.
 
 ## List of Nodes
 1. Brain: 
