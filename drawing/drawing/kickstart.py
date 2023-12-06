@@ -47,7 +47,8 @@ class Kickstart(Node):
         self.cal_client = self.create_client(
             Empty, 'calibrate', callback_group=self.cal_callback_group)
         self.tile_client = self.create_client(
-            BoardTiles, 'where_to_write', callback_group=self.tile_callback_group)
+            BoardTiles, 'where_to_write',
+            callback_group=self.tile_callback_group)
         self.movemp_client = self.create_client(
             MovePose, '/moveit_mp', callback_group=self.mp_callback_group)
         self.cartesian_client = self.create_client(
@@ -55,11 +56,14 @@ class Kickstart(Node):
 
         # wait for clients' services to be available
         while not self.cal_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Calibrate service not available, waiting...')
+            self.get_logger().info('Calibrate service not available,\
+                                   waiting...')
         while not self.tile_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Where to Write service not available, waiting...')
+            self.get_logger().info('Where to Write service not available,\
+                                   waiting...')
         while not self.movemp_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Move It MP service not available, waiting...')
+            self.get_logger().info('Move It MP service not available,\
+                                   waiting...')
         while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Carisiam mp  service not available, waiting...')
 
