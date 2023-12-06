@@ -26,8 +26,8 @@ setup(
     zip_safe=True,
     maintainer='Graham Clifford',
     maintainer_email='grahamclifford2024@u.northwestern.edu',
-    description='This package controls the Emika Franka Panda robot and gets \
-    it to pick up a piece of paper.',
+    description='This package controls the Emika Franka Panda robot and\
+        draws on a whiteboard.',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
