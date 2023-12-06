@@ -46,7 +46,7 @@ class TestTagsTf(unittest.TestCase):
         _ = TransformListener(buffer, self.node)
         proc_output.assertWaitFor(
             "Static Transform: panda_hand_tcp->camera_link", process=tags,
-            timeout=15.0)
+            timeout=3.0)
         rclpy.spin_once(self.node)
         xform = buffer.lookup_transform(
             "panda_hand_tcp", "camera_link", rclpy.time.Time())
