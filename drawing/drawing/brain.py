@@ -330,35 +330,7 @@ class Brain(Node):
 
         elif self.state == State.WAITING:
             pass
-            # waiting state for writing actions
-            # if self.kick_future:
-            # Turns on OCR when kickstart finishes and waits for hangman callback
 
-            # self.kick_future = None
-            # elif self.calibrate_future:
-            #     # Listens for a return value from calibration to switch to LETTER
-
-            #     self.calibrate_future = None
-            # elif self.board_future:
-            #     # Looks that board has returned values
-            #     # Assigns poses for approach and cartesian then moves to APPROACHING
-            #     self.current_mp_pose = self.board_future.initial_pose
-            #     self.current_traj_poses = self.board_future.pose_list
-            #     self.board_future = None
-            #     self.state = State.APPROACHING
-            # else:
-            # If nothing has returned from client call, WAITING passes
-
-        # elif self.state == State.WRITING:
-        #     # waiting state for the Franka to complete the mp and cartesian trajectories
-        #     # in 2 steps before it moves back to LETTER
-        #     if self.movepose_future:
-        #         #TODO: update for use_forece_control
-        #         self.cartesian_mp_service_client.call_async(self.current_traj_poses)
-        #         self.movepose_future = None
-        #     else:
-        #         pass
-            # Node will only leave this state once trajectory_status returns 'done'
 
 
 def main(args=None):
