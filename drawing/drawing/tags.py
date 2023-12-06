@@ -1,4 +1,5 @@
-""" This node deals with the april tags and handels tf tree.
+"""
+This node deals with the april tags and handels tf tree.
 
 1. Publishes a static transform between camera and the robot
 2. Calibrate service: takes the arm to a specified pose and looks at the april
@@ -6,7 +7,9 @@
 3. Letter pose service: gives the start pose of any letter wrt to the
     panda_link0.
 4. Update Trajectory service: Given a list of poses.
+
 """
+
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -176,7 +179,7 @@ class Tags(Node):
 
     async def where_to_write_callback(self, request, response):
         """
-        Gives the pose of the end-effector to write a perticular letter.
+        Give the pose of the end-effector to write a perticular letter.
 
         Args:
         ----
@@ -260,7 +263,7 @@ class Tags(Node):
 
     def update_trajectory_cb(self, request, response):
         """
-        Called for force-control, returns updated list of poses.
+        Call for force-control, returns updated list of poses.
 
         Args:
         ----
@@ -272,7 +275,6 @@ class Tags(Node):
             output_pose: updated list of poses
 
         """
-
         ansT, ansR = self.get_transform("board", "panda_hand_tcp")
 
         # positive z is out of the board
@@ -313,10 +315,12 @@ class Tags(Node):
         """
         Record the transforms to calibrate the camera to the robot.
 
+        Record the transforms for calibration.
+
         Args:
         ----
-            matrix A : Transformation matrix from panda_link0 to panda_hand_tcp
-            matrix B : Transformation matrix from camera_link to april tag
+        request (Empty): An empty service request.
+        response (Empty): An empty service response.
 
         """
         At, Aq = self.get_transform("panda_link0", "panda_hand_tcp")
@@ -330,7 +334,7 @@ class Tags(Node):
         return response
 
     def write_matrix_to_file(self, file_path, matrix):
-        """Function to write matrices to a file."""
+        """Write matrices to a file."""
         with open(file_path, "a") as file:
             for row in matrix:
                 file.write(",".join(map(str, row)) + "\n")
@@ -375,7 +379,7 @@ class Tags(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     async def timer_callback(self):
-        """Publishes the panda_link0 to board transform constantly."""
+        """Publish the panda_link0 to board transform constantly."""
         if self.state == State.CALIBRATE and self.goal_state == "done":
             ansT1, ansR1 = self.get_transform("panda_link0", "tag11")
             ansT2, ansR2 = self.get_transform("panda_link0", "tag12")

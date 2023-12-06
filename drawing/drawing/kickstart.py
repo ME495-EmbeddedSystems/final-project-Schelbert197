@@ -2,8 +2,6 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from geometry_msgs.msg import Pose, Point, Quaternion
-
 from std_srvs.srv import Empty
 from std_msgs.msg import String
 
@@ -28,11 +26,6 @@ class Kickstart(Node):
         self.kickstart_service = self.create_service(
             Empty, 'kickstart_service', self.kickstart_callback)
 
-        # timer variables
-        # self.frequency = 100.0
-        # self.timer_period = 1 / self.frequency
-        # self.timer = self.create_timer(self.timer_period, self.timer_callback)
-
         # create mutually exclusive callback groups
         self.cal_callback_group = MutuallyExclusiveCallbackGroup()
         self.tile_callback_group = MutuallyExclusiveCallbackGroup()
@@ -43,24 +36,30 @@ class Kickstart(Node):
         self.cal_client = self.create_client(
             Empty, 'calibrate', callback_group=self.cal_callback_group)
         self.tile_client = self.create_client(
-            BoardTiles, 'where_to_write', callback_group=self.tile_callback_group)
+            BoardTiles, 'where_to_write',
+            callback_group=self.tile_callback_group)
         self.movemp_client = self.create_client(
             MovePose, '/moveit_mp', callback_group=self.mp_callback_group)
         self.cartesian_client = self.create_client(
-            Cartesian, '/cartesian_mp', callback_group=self.cartesian_callback_group)
+            Cartesian, '/cartesian_mp',
+            callback_group=self.cartesian_callback_group)
 
         self.cal_state_subscriber = self.create_subscription(
             String, 'cal_state', self.cal_state_callback, 10)
 
         # wait for clients' services to be available
         while not self.cal_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Calibrate service not available, waiting...')
+            self.get_logger().info('Calibrate service not available,\
+                                   waiting...')
         while not self.tile_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Where to Write service not available, waiting...')
+            self.get_logger().info('Where to Write service not available,\
+                                   waiting...')
         while not self.movemp_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Move It MP service not available, waiting...')
+            self.get_logger().info('Move It MP service not available,\
+                                   waiting...')
         while not self.cartesian_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Carisiam mp  service not available, waiting...')
+            self.get_logger().info('Cartisian mp  service not available,\
+                                   waiting...')
 
     def cal_state_callback(self, msg):
         self.cal_state = msg
@@ -78,7 +77,6 @@ class Kickstart(Node):
         await self.draw_component(1, 2)
         await self.draw_component(1, 3)
         await self.draw_component(1, 4)
-        # await self.draw_component(1, 5)
 
         # # draw dashes for wrong letters
         await self.draw_component(0, 0)
@@ -118,8 +116,6 @@ class Kickstart(Node):
             pose1 = resp.initial_pose
             pose_list = resp.pose_list
 
-            ##################### moving to the position####################
-
             self.get_logger().info(f"Pose List for Dash: {pose1}")
             self.get_logger().info(f"Pose List for Dash: {pose_list}")
             request2 = Cartesian.Request()
@@ -128,7 +124,7 @@ class Kickstart(Node):
             request2.replan = False
             request2.use_force_control = [False]
             await self.cartesian_client.call_async(request2)
-            self.get_logger().info(f"one done")
+            self.get_logger().info("one done")
 
             request2 = Cartesian.Request()
             request2.poses = [pose_list[0]]
@@ -136,7 +132,7 @@ class Kickstart(Node):
             request2.replan = False
             request2.use_force_control = [dash_on[0]]
             await self.cartesian_client.call_async(request2)
-            self.get_logger().info(f"second done")
+            self.get_logger().info("second done")
             # draw remaining pose dashes with Cartesian mp
             request3 = Cartesian.Request()
             request3.poses = pose_list[1:]
@@ -145,7 +141,7 @@ class Kickstart(Node):
             request3.use_force_control = dash_on[1:]
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
             await self.cartesian_client.call_async(request3)
-            self.get_logger().info(f"all done")
+            self.get_logger().info("all done")
 
         if mode == 3:
             # take in mode and position and draw component accordingly
@@ -169,7 +165,7 @@ class Kickstart(Node):
             request2.replan = False
             request2.use_force_control = [False]
             await self.cartesian_client.call_async(request2)
-            self.get_logger().info(f"working on it")
+            self.get_logger().info("working on it")
 
             request2 = Cartesian.Request()
             request2.poses = [pose_list[0]]
@@ -177,7 +173,7 @@ class Kickstart(Node):
             request2.replan = False
             request2.use_force_control = [stand_on[0]]
             await self.cartesian_client.call_async(request2)
-            self.get_logger().info(f"still working on it")
+            self.get_logger().info("still working on it")
             # draw remaining pose dashes with Cartesian mp
             request3 = Cartesian.Request()
             request3.poses = pose_list[1:]
@@ -186,15 +182,7 @@ class Kickstart(Node):
             request3.use_force_control = stand_on[1:]
             self.get_logger().info(f"pose_list: {pose_list[1:]}")
             await self.cartesian_client.call_async(request3)
-            self.get_logger().info(f"all done")
-
-            # request4 = Cartesian.Request()
-            # request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
-            #     x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
-            # request4.velocity = 0.1
-            # request4.replan = False
-            # request4.use_force_control = [False]
-            # await self.cartesian_client.call_async(request4)
+            self.get_logger().info("all done")
 
 
 def main(args=None):

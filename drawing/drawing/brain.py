@@ -292,11 +292,16 @@ class Brain(Node):
 
             else:
                 request4 = Cartesian.Request()
-                request4.poses = [Pose(position=Point( x=0.30744234834406486, y=-0.17674628233240325, z=0.5725350884705022), orientation=Quaternion(
-                    x=0.7117299678289105,
-                    y=-0.5285053338340909,
-                    z=0.268057323473255,
-                    w=0.37718408812611504,))]
+                request4.poses = [Pose(
+                    position=Point(
+                        x=0.30744234834406486,
+                        y=-0.17674628233240325,
+                        z=0.5725350884705022),
+                    orientation=Quaternion(
+                        x=0.7117299678289105,
+                        y=-0.5285053338340909,
+                        z=0.268057323473255,
+                        w=0.37718408812611504,))]
                 request4.velocity = 0.1
                 request4.replan = False
                 request4.use_force_control = [False]
