@@ -202,8 +202,8 @@ class Executor(Node):
         elif self.joint_trajectories and self.state == State.PUBLISH and self.i % 10 == 0:
             # self.get_logger().info(f"publishing!!!!!!!!!!!!!!!")
 
-            Kp = 0.0028
-            Ki = 0.000002
+            Kp = 0.0029
+            Ki = 0.000005
             Kd = 0.0009
 
             # self.get_logger().info(
@@ -221,7 +221,7 @@ class Executor(Node):
                 self.get_logger().info(f"ee_force: {self.ee_force}")
                 self.get_logger().info(
                     f"original joint pos: {self.output_angle}")
-                force_error = 1.75 - self.ee_force
+                force_error = 2.3 - self.ee_force
                 self.integral_force_error += force_error * 0.1
                 angle_adjustment = Kp * force_error + Ki * self.integral_force_error + \
                     Kd * (force_error - self.previous_force_error)

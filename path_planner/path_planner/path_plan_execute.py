@@ -82,13 +82,13 @@ class Path_Plan_Execute():
 
         ########## create service clients ###########
         self.fk_client = self.node.create_client(
-            GetPositionFK, 'compute_fk', callback_group=self.fk_callback_group)
+            GetPositionFK, '/compute_fk', callback_group=self.fk_callback_group)
 
         self.ik_client = self.node.create_client(
-            GetPositionIK, 'compute_ik', callback_group=self.ik_callback_group)
+            GetPositionIK, '/compute_ik', callback_group=self.ik_callback_group)
 
         self.cartesian_path_client = self.node.create_client(
-            GetCartesianPath, 'compute_cartesian_path', callback_group=self.cartesian_callback_group)
+            GetCartesianPath, '/compute_cartesian_path', callback_group=self.cartesian_callback_group)
 
         # wait for the clients' services to be available
         while not self.ik_client.wait_for_service(timeout_sec=1.0):

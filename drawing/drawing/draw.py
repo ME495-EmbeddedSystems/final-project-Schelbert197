@@ -193,7 +193,7 @@ class Drawing(Node):
 
         self.prev_state = State.STOP
         table = Pose()
-        table.position = Point(z=-1.7)
+        table.position = Point(z=-1.6)
         self.draw_obs(name="table", pos=table, size=[1.5, 1.0, 3.0])
         self.board_future = rclpy.task.Future()
 

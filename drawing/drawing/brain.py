@@ -150,12 +150,14 @@ class Brain(Node):
                 point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
                 self.alphabet.update(point_dict)
             else:  # All letters of alphabet
-                fp = FontProperties(family="Liberation Sans Narrow", style="normal")
+                fp = FontProperties(
+                    family="Liberation Sans Narrow", style="normal")
                 verts, codes = TextToPath().get_text_path(fp, letters[i])
                 xlist = []
                 ylist = []
                 for j in range(0, len(verts) - 1):
-                    if verts[j][0] > 0: #Commented out because I want to keep the 0,0 for lifting off the board
+                    # Commented out because I want to keep the 0,0 for lifting off the board
+                    if verts[j][0] > 0:
                         xlist.append(
                             verts[j][0] * self.scale_factor * self.board_scale)
                         ylist.append(
@@ -273,13 +275,13 @@ class Brain(Node):
             # goal_js.joint_names = ["panda_joint4", "panda_joint5", "panda_joint7"]
             # goal_js.joint_positions = [-2.61799, -1.04173, 2.11185]
             goal_js.target_pose.position = Point(
-                x=0.545029890155533, y=0.05943234468738731, z=0.5893544164237723)
+                    x=0.545029890155533, y=0.05943234468738731, z=0.5893544164237723)
             goal_js.target_pose.orientation = Quaternion(
-                x=-0.48576480709767544, y=-0.5175973920275, z=-0.4696623291331898, w=0.5249216975367619)
+                    x=-0.48576480709767544, y=-0.5175973920275, z=-0.4696623291331898, w=0.5249216975367619)
             goal_js.use_force_control = False
             ##################### moving to the position####################
             self.get_logger().info('before moved')
-            await self.movepose_service_client.call_async(goal_js)
+            # await self.movepose_service_client.call_async(goal_js)
             self.ocr_pub.publish(Bool(data=True))
             self.state = State.WAITING
 
@@ -302,8 +304,11 @@ class Brain(Node):
                 # self.state = State.WAITING
             else:
                 request4 = Cartesian.Request()
-                request4.poses = [Pose(position=Point(x=0.0, y=-0.3, z=0.3), orientation=Quaternion(
-                    x=0.7117299678289105, y=-0.5285053338340909, z=0.268057323473255, w=0.37718408812611504))]
+                request4.poses = [Pose(position=Point( x=0.30744234834406486, y=-0.17674628233240325, z=0.5725350884705022), orientation=Quaternion(
+                    x=0.7117299678289105,
+                    y=-0.5285053338340909,
+                    z=0.268057323473255,
+                    w=0.37718408812611504,))]
                 request4.velocity = 0.1
                 request4.replan = False
                 request4.use_force_control = [False]
