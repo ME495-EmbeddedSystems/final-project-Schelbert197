@@ -148,7 +148,7 @@ class Hangman(Node):
         Publishes the list of points that define the letter to
         the ros topic for the franka to read.
 
-        Args
+        Args:
         ----
         letters (List) : The guessed letter.
         positions (List) : The positions within their array.

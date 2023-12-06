@@ -204,7 +204,7 @@ class Brain(Node):
         """
         Call back when feedback is given from hangman.
 
-        Args
+        Args:
         ----
         msg (LetterMsg) : The character with postion to be written on the board
 
@@ -236,7 +236,7 @@ class Brain(Node):
 
         Function to process the shape into trajectory service calls.
 
-        Args
+        Args:
         ----
         shape (BoardTiles.Request()) : The poses in BoardTiles form
 

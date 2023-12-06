@@ -21,11 +21,13 @@ class TestTagsTf(unittest.TestCase):
     def tearDown(self):
         self.node.destroy_node()
 
-    def test_identity(self):
+    def test_identity(self, tags, proc_output):
 
         pose = Pose(position=Point(x=0.0, y=1.0, z=0.0),
                     orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0))
         path_planner = Path_Plan_Execute(self.node)
         test_goal_pose = path_planner.set_goal_pose(pose)
+
+        rclpy.spin_once(self.node)
 
         assert pose == test_goal_pose
