@@ -19,7 +19,7 @@ SERVICES:
 CLIENTS:
   + replan_client (Replan): Replan trajectories that hit the force threshold.
   + update_trajectory_client (UpdateTrajectory): Modify the pose that was
-  planned for so that it is moved slightly in the positive z dirrection in
+  planned for so that it is moved slightly in the positive z direction in
   the whiteboard's frame, which is out of the board.
 
 SUBSCRIBERS:
@@ -199,9 +199,6 @@ class Executor(Node):
         self.use_force_control = request.use_force_control
         if not self.use_force_control:
             self.use_control_loop = False
-        self.get_logger().info(f"use force control: {self.use_force_control}")
-        self.get_logger().info(f"replan: {self.replan}")
-        self.get_logger().info(f"use control loop: {self.use_control_loop}")
 
         if request.state == "publish":
             self.state = State.PUBLISH
