@@ -1,35 +1,51 @@
+"""
+The Hangman Node.
+
+Plays the hangman game based on the OCR user input.
+
+Interfaces with the brain node and the OCR node to evaulate data.
+PUBLISHERS:
+  + /writer (LetterMsg) - The data sent to brain for a given play.
+SUBSCRIBERS:
+  + /user_input (String) - The guess sent from OCR for given play.
+"""
+
 from enum import Enum, auto
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String, Float64MultiArray
-from matplotlib.textpath import TextToPath
-from matplotlib.font_manager import FontProperties
+from std_msgs.msg import String
 import urllib.request
-from brain_interfaces.msg import LetterMsg
+from gameplay_interfaces.msg import LetterMsg
 from random import randint
 
 
 class State(Enum):
-    """Create the states of the node to determine what the timer
-    fcn should be doing (MOVING or STOPPED)"""
+    """
+    The State class.
+
+    Create the states of the node to determine what the timer
+    fcn should be doing (PLAYING, WAITING, OR GAME_OVER).
+
+    """
+
     PLAYING = auto(),
     GAME_OVER = auto(),
     WAITING = auto()
 
 
 class Hangman(Node):
-    """Plays the game hangman with user input"""
+    """Plays the game hangman with user input."""
 
     def __init__(self):
         super().__init__("hangman")
-        """Initialize the game vars and other stuff"""
+        """Initialize the game vars and other characters."""
 
         self.state = State.WAITING
         self.word = "BABIES"
         self.guesses_to_fail = 5
         self.current_wrong_guesses = 0
         self.guessed_letters = []
-        self.word_status = ['_', '_', '_', '_', '_']
+        self.word_status = ['_', '_', '_', '_', '_', '_']
         self.game_won = False
         self.user_guess = None
         self.Alphabet = {}
@@ -46,46 +62,23 @@ class Hangman(Node):
         self.writer = self.create_publisher(
             LetterMsg, "/writer", qos_profile=10, callback_group=None)
 
-        self.create_letters()
         self.pick_words()
 
-    def create_letters(self):
-        """Create the dictionary of bubble letters"""
-
-        letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for i in range(0, len(letters)):
-            letter = letters[i]
-            fp = FontProperties(family="DejaVu Sans Mono", style="normal")
-            verts, codes = TextToPath().get_text_path(fp, letters[i])
-            # print(type(path))
-            # print(verts)
-            xlist = []
-            ylist = []
-            for j in range(0, len(verts)-1):
-                if verts[j][0] > 0:
-                    xlist.append(verts[j][0])
-                    ylist.append(verts[j][1])
-            point_dict = {letter: {'xlist': xlist, 'ylist': ylist}}
-            self.Alphabet.update(point_dict)
-
     def pick_words(self):
-        """Randomly chooses a 6 letter word"""
-
+        """Randomly chooses a 6 letter word."""
         word_url = "https://www.mit.edu/~ecprice/wordlist.10000"
         response = urllib.request.urlopen(word_url)
         long_txt = response.read().decode()
         words = long_txt.splitlines()
         word_list = []
         for i in range(0, len(words)):
-            if len(words[i]) == 5:
+            if len(words[i]) == 6:
                 word_list.append(words[i])
 
         self.word = word_list[randint(0, len(word_list))].upper()
-        self.get_logger().warn(f"Your word is: {self.word}")
 
     def evaulate_guess(self, guess):
-        """Evaluates the guess from the user"""
-
+        """Evaluate the guess from the user."""
         upper_guess = guess.upper()
         letter_list = []
         position_list = []
@@ -122,11 +115,11 @@ class Hangman(Node):
                         mode_list.append(1)
             else:
                 self.get_logger().info('wrong guess')
+                self.guessed_letters.append(upper_guess)
                 # write wrong letter
                 letter_list.append(upper_guess)
                 mode_list.append(0)
                 position_list.append(len(self.guessed_letters))
-                self.guessed_letters.append(upper_guess)
                 # write hangman
                 letter_list.append(self.man_list[self.current_wrong_guesses])
                 mode_list.append(2)
@@ -139,44 +132,48 @@ class Hangman(Node):
         self.send_letter(positions=position_list,
                          mode=mode_list, letters=letter_list)
 
-    def prompt_user(self):
-        """User prompt for testing, This would get replaced by OCR pipeline client"""
-        user_guess = input("What letter/word is your guess?")
-        self.evaulate_guess(user_guess)
-
     def show_progress(self):
-        """Shows the game progress"""
+        """Show the game progress."""
         self.get_logger().info(
             f"Guessed wrong letters: {self.guessed_letters}")
         self.get_logger().info(f"Word Status: {self.word_status}")
         self.get_logger().info(f"Wrong guesses: {self.current_wrong_guesses}")
-        self.draw_man()
 
     def send_letter(self, letters, positions, mode):
-        """Publishes the list of points that define the letter to the ros topic for the franka to read"""
+        """
+        Send Letter.
+
+        Publishes the list of points that define the letter to
+        the ros topic for the franka to read.
+
+        Args:
+        ----
+        letters (List) : The guessed letter.
+        positions (List) : The positions within their array.
+        mode (List) : The mode or list the letter object populates.
+
+        """
         letter_to_send = LetterMsg()
         letter_to_send.positions = positions
         letter_to_send.letters = letters
         letter_to_send.mode = mode
         self.writer.publish(letter_to_send)
 
-    def draw_man(self):
-        """lil fella"""
-        match self.current_wrong_guesses:
-
-            case 1:
-                self.get_logger().info("O \n------")
-            case 2:
-                self.get_logger().info("O- \n------")
-            case 3:
-                self.get_logger().info("O-| \n------")
-            case 4:
-                self.get_logger().info("O-|- \n------")
-            case 5:
-                self.get_logger().info("O-|-<  you died \n------")
-
     def check_word(self):
-        """Checks the guessed word"""
+        """
+        Check word.
+
+        Checks the guessed word against the answer.
+
+        Args:
+        ----
+        None
+
+        Returns
+        -------
+        (Bool): A True or False correctness value.
+
+        """
         player_word = ''.join(self.word_status)
         if player_word == self.word:
             self.game_won = True
@@ -185,36 +182,22 @@ class Hangman(Node):
         else:
             return False
 
-    def play_game(self):
-        """plays game for now. Will be replaced with timer callback"""
-
-        while self.current_wrong_guesses < self.guesses_to_fail and self.game_won == False:
-            if self.check_word() == False:
-                self.prompt_user()
-                self.show_progress()
-
-        if self.check_word() == True:
-            self.get_logger().info("Game won. good job.")
-        else:
-            self.get_logger().info("Game lost, try again later.")
-
     def user_input_callback(self, msg: String):
-        """Callback for the user input subscriber (check prompt user)"""
+        """Call back for the user input subscriber."""
         self.user_guess = msg.data
         self.get_logger().info(f"Message: {self.user_guess}")
-        # self.evaulate_guess(self.user_guess)
 
     def timer_callback(self):
-        """Timer callback for the game to play hangman (check play game)"""
+        """Timer callback for the game to play hangman."""
         if self.state == State.PLAYING:
             self.evaulate_guess(self.user_guess)
             if self.current_wrong_guesses < self.guesses_to_fail:
-                if self.check_word() == False:
+                if self.check_word() is False:
                     # self.prompt_user()
                     self.show_progress()
                     self.state = State.WAITING
 
-                if self.check_word() == True:
+                if self.check_word() is True:
                     self.get_logger().info("Game won. good job.")
                     self.show_progress()
                     self.state = State.GAME_OVER
@@ -226,9 +209,10 @@ class Hangman(Node):
 
         if self.state == State.WAITING:
             # Check if the player has done something
-            if self.user_guess == None:
+            if self.user_guess is None:
                 pass
-            elif self.user_guess in self.guessed_letters or self.user_guess in self.word_status:
+            elif self.user_guess in self.guessed_letters \
+                    or self.user_guess in self.word_status:
                 pass
             else:
                 self.state = State.PLAYING
@@ -236,13 +220,9 @@ class Hangman(Node):
         if self.state == State.GAME_OVER:
             pass
 
-# test = Hangman()
-
-# test.play_game()
-
 
 def main(args=None):
-    """ The node's entry point """
+    """Enter the node."""
     rclpy.init(args=args)
     node = Hangman()
     rclpy.spin(node)

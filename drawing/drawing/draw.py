@@ -1,3 +1,35 @@
+"""
+Plan and execute robot paths using force control.
+
+Accept requests to plan trajectories for the franka robot, and
+subsequently send them to another node to be executed. Additionally,
+calculate the estimated force at the end-effector, and publish it
+on a topic.
+
+PARAMETERS:
+  + use_fake_hardware (bool) - Determines whether or not trajectories will
+  be executed on the real robot or only in rviz.
+  + robot_name (string) - the name of the robot.
+  + group_name (string) - the planning group of the robot.
+  + frame_id (string) - the id of the base frame of the robot.
+
+SERVICES:
+  + moveit_mp_service (MovePose) - Uses the request to send action requests
+  to MoveIT
+  + cartesian_mp_service (Cartesian) - Use the request to send service calls
+  to the /compute_cartesian_path service.
+  + replan_path (Replan) - Use the request to replan the trajectory to a Pose.
+
+CLIENTS:
+  + joint_trajectories_client (ExecuteJointTrajectories) - Send join
+  trajectories to be executed.
+
+PUBLISHERS:
+  + force_pub (EEForce) - Publish the force at the end-effector in the end-
+  effector frame's x axis.
+
+"""
+
 import rclpy
 from rclpy.node import Node
 from rclpy.task import Future
@@ -9,15 +41,14 @@ from path_planner.path_plan_execute import Path_Plan_Execute
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from enum import Enum, auto
 
-from std_msgs.msg import String
-
 from action_msgs.msg import GoalStatus
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 import tf2_ros
-from brain_interfaces.srv import MovePose, MoveJointState, Cartesian, ExecuteJointTrajectories, Replan, Box
+from brain_interfaces.srv import (MovePose, Cartesian,
+                                  ExecuteJointTrajectories, Replan)
 from brain_interfaces.msg import EEForce
 
 import numpy as np
@@ -27,13 +58,6 @@ np.set_printoptions(suppress=True)
 
 class State(Enum):
 
-    TOUCHING_BOARD = auto()
-    WRITING_LETTERS = auto()
-    CALIBRATE = auto()
-    GET_TRANSFORM = auto()
-    LOAD_MOVES = auto()
-    STOP = auto()
-    PLANNING = auto()
     EXECUTING = auto()
     WAITING = auto()
 
@@ -54,6 +78,10 @@ class Drawing(Node):
     ----
     None
 
+    Returns:
+    -------
+    None
+
     """
 
     def __init__(self):
@@ -62,8 +90,6 @@ class Drawing(Node):
 
         # declare parameters
         self.declare_parameter('use_fake_hardware', True)
-        self.declare_parameter('x_init', 0.5)
-        self.declare_parameter('y_init', 0.0)
         self.declare_parameter('robot_name', 'panda')
         self.declare_parameter('group_name', 'panda_manipulator')
         self.declare_parameter('frame_id', 'panda_link0')
@@ -71,11 +97,6 @@ class Drawing(Node):
         # get parameters
         self.use_fake_hardware = self.get_parameter(
             'use_fake_hardware').get_parameter_value().bool_value
-
-        self.x_init = self.get_parameter(
-            'x_init').get_parameter_value().double_value
-        self.y_init = self.get_parameter(
-            'y_init').get_parameter_value().double_value
 
         self.robot_name = self.get_parameter(
             'robot_name').get_parameter_value().string_value
@@ -91,12 +112,12 @@ class Drawing(Node):
         self.moveit_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.cartesian_mp_callback_group = MutuallyExclusiveCallbackGroup()
         self.replan_service_callback_group = MutuallyExclusiveCallbackGroup()
-        self.jointstate_mp_callback_group = MutuallyExclusiveCallbackGroup()
-        self.execute_trajectory_status_callback_group = MutuallyExclusiveCallbackGroup()
-        self.execute_joint_trajectories_callback_group = MutuallyExclusiveCallbackGroup()
+        self.execute_joint_trajectories_callback_group = \
+            MutuallyExclusiveCallbackGroup()
         self.board_service_callback_group = MutuallyExclusiveCallbackGroup()
         self.timer = self.create_timer(
-            0.001, self.timer_callback, callback_group=self.timer_callback_group)
+            0.001, self.timer_callback,
+            callback_group=self.timer_callback_group)
 
         self.path_planner = Path_Plan_Execute(self)
 
@@ -105,60 +126,39 @@ class Drawing(Node):
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
 
-        ##### create services #####
+        # create services
+
         # this service is for the brain node to send singular poses for
         # this node to plan paths using te moveite motion planner
         self.moveit_mp_service = self.create_service(
-            MovePose, '/moveit_mp', self.moveit_mp_callback, callback_group=self.moveit_mp_callback_group)
+            MovePose, '/moveit_mp', self.moveit_mp_callback,
+            callback_group=self.moveit_mp_callback_group)
 
         # this service is for the brain node to send lists of poses for
         # this node to use to plan paths using the cartesian motion
-        # planner. It also needs a Point() object, which contains the
-        # start position of the letter to be planned.
+        # planner.
         self.cartesian_mp_service = self.create_service(
-            Cartesian, '/cartesian_mp', self.cartesian_mp_callback, callback_group=self.cartesian_mp_callback_group)
+            Cartesian, '/cartesian_mp', self.cartesian_mp_callback,
+            callback_group=self.cartesian_mp_callback_group)
 
         self.replan_service = self.create_service(
-            Replan, '/replan_path', self.replan_callback, callback_group=self.replan_service_callback_group)
-
-        # service to make
-        # self.create_box_service = self.create_service(
-        #     Box, '/make_board', self.board_callback, callback_group=self.board_service_callback_group)
-
-        # this service is for other ROS nodes to send a JointState() msg
-        # to this node. This node will plan a path to the combination of
-        # joint states and the move there.
-        self.plan_joint_state_service = self.create_service(
-            MoveJointState, '/jointstate_mp', self.jointstate_mp_callback, callback_group=self.jointstate_mp_callback_group)
-
-        ############# create subscribers ################
-
-        # this subscriber is used for communicating with the node we created
-        # to execute our trajectories.
-        self.execute_trajectory_status_sub = self.create_subscription(
-            String, '/execute_trajectory_status', self.execute_trajectory_status_callback, 10, callback_group=self.execute_trajectory_status_callback_group)
-
-        ############# create publishers ##############
-
-        # this publisher is used to send the joint trajectories we plan to our
-        # node that we created to execute them.
+            Replan, '/replan_path', self.replan_callback,
+            callback_group=self.replan_service_callback_group)
 
         self.joint_trajectories_client = self.create_client(
-            ExecuteJointTrajectories, '/joint_trajectories', callback_group=self.execute_joint_trajectories_callback_group)
+            ExecuteJointTrajectories, '/joint_trajectories',
+            callback_group=self.execute_joint_trajectories_callback_group)
 
         # this publisher is used to send the current force at the end-effector
         # to the node we created to execute trajectories.
         self.force_pub = self.create_publisher(
             EEForce, '/ee_force', 10)
 
-        self.font_size = 0.1
-
         self.plan_future = Future()
         self.execute_future = Future()
 
         self.moveit_mp_queue = []  # moveit motion planner queue
         self.cartesian_mp_queue = []  # cartesian motion planner queue
-        self.letter_start_point = []
 
         self.state = State.WAITING
 
@@ -168,13 +168,7 @@ class Drawing(Node):
         # position of the center of mass of the end-effector
         # in the panda_hand frame
         self.pc = np.array([-0.01, 0, 0.03])
-        # position of the tip of the end-effector in the panda_hand frame
-        self.pe = np.array([0, 0, 0.1034])
-        self.p6f = np.array([0.088, -0.1070, 0])
 
-        self.force_offset = 0.0  # N
-        self.force_threshold = 3.0  # N
-        self.calibration_counter = 0.0  # N
         # list bc moving average
         self.ee_force = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  # N
 
@@ -190,14 +184,28 @@ class Drawing(Node):
             position=Point(x=-0.5, y=0.0, z=0.4),
             orientation=Quaternion(x=1.0, y=0.0, z=0.0, w=0.0)
         )
-
-        self.prev_state = State.STOP
         table = Pose()
         table.position = Point(z=-1.6)
         self.draw_obs(name="table", pos=table, size=[1.5, 1.0, 3.0])
         self.board_future = rclpy.task.Future()
 
     def array_to_transform_matrix(self, translation, quaternion):
+        """
+        Calculate the transformation and rotation matrices.
+
+        Calculate the transformation and rotation matrices using
+        a 3x1 translation vector and a quaternion.
+
+        Args:
+        ----
+        translation (numpy array): A 3x1 translation vector.
+        quaternion (numpy array): A 4x1 quaternion.
+
+        Returns:
+        -------
+        transform_matrix (numpy array): A transformation matrix.
+        rotation_matrix (nuumpy array): A rotation matrix.
+        """
         # Normalize the quaternion
         quaternion /= np.linalg.norm(quaternion)
         quaternion = [quaternion[3], quaternion[0],
@@ -214,73 +222,114 @@ class Drawing(Node):
         return transform_matrix, rotation_matrix
 
     def calc_joint_torque_offset(self):
+        """
+        Calculate the joint torque offset in panda_joint6.
 
+        Using the location of the center of mass of the gripper and
+        the mass of the gripper and its attachments, figure out the
+        portion of the torque in panda_joint6 that is due to
+        the gripper itself and the current time.
+
+        Args:
+        ----
+        None
+
+        Returns:
+        -------
+        joint_torque_offset (float): The amount of torque in panda_joint6
+        that is due to the mass of the end-effector and its attachments.
+
+        """
+        # world to panda_joint6 from tf
         pw6, quaternion_w6 = self.get_transform(
             'panda_link0', 'panda_link6')
 
+        # transformation and rotation matrices from translation vector
+        # and quaternion.
         Tw6, Rw6 = self.array_to_transform_matrix(pw6, quaternion_w6)
 
+        # panda_joint6 to the "flange" of the panda robot. This is
+        # defined at panda0.robot in the settings.
         p6f, quaternion_6f = self.get_transform('panda_link6', 'panda_hand')
 
-        # self.get_logger().info(f"p6f: {p6f}")
-        # self.get_logger().info(f"quaternioon_6f: {quaternion_6f}")
-
+        # transformation matrices from translation vector and quaternion.
         T6f, R6f = self.array_to_transform_matrix(p6f, quaternion_6f)
 
-        # self.get_logger().info(f"T6f: {T6f}")
-
+        # calculate force due to gravity in the world frame
         Fw = np.array([0, 0, -self.gripper_mass * self.g])
-        F6 = np.linalg.inv(Rw6) @ Fw
-        M6 = F6 * (p6f + R6f @ self.pc)
-        # M6 = np.array([F6[0] * p6f[2]])CALIBRATE
 
-        # self.get_logger().info(f"R6f @ self.pc: {R6f @ self.pc}")
-        # self.get_logger().info(f"p6f: {p6f + R6f @ self.pc}")
-        # self.get_logger().info(f"Rw6: {np.linalg.inv(Rw6)}")
-        # self.get_logger().info(f"Fw: {Fw}")
-        # self.get_logger().info(f"Rw6 @ Fw: {np.linalg.inv(Rw6) @ Fw}")
-        # self.get_logger().info(f"F6: {F6}")
-        # self.get_logger().info(f"M6: {M6}")
+        # calculate force in the frame of panda_joint6
+        F6 = np.linalg.inv(Rw6) @ Fw
+
+        # calculate the expected moment in panda_joint6
+        M6 = F6 * (p6f + R6f @ self.pc)
 
         joint_torque_offset = M6[1]
 
         return joint_torque_offset
 
     def calc_ee_force(self, effort_joint6):
+        """
+        Calculate the force at the end-effector.
 
+        Calculate the force at the end-effector in the xyz directions
+        in the frame of the end-effector.
+
+        Args:
+        ----
+        effort_joint6 (float): The effort in panda_joint6 in Nm.
+
+        Returns:
+        -------
+        Fe (float): force at the end effector.
+
+        """
+        # ee to panda_joint6 from tf
         pe6, quaternion_e6 = self.get_transform(
             'panda_hand_tcp', 'panda_link6')
 
+        # calc transformation and rotation matrices.
         Te6, Re6 = self.array_to_transform_matrix(pe6, quaternion_e6)
 
+        # panda_joint6 to ee from tf
         p6e, quaternion_6e = self.get_transform(
             'panda_link6', 'panda_hand_tcp')
 
-        T6e, R6e = self.array_to_transform_matrix(p6e, quaternion_6e)
-
+        # torque in panda_joint6, which is about its y axis.
         M6 = np.array([0, effort_joint6, 0])
+
+        # calculate the force at the ee due to the moment.
         F6 = np.divide(M6, p6e,
                        out=np.zeros_like(p6e), where=p6e != 0)
 
+        # transform force from the panda_joint6 frame to the ee frame.
         Fe = Re6 @ F6
 
         return Fe
 
-    def execute_trajectory_status_callback(self, msg):
-
-        # the "done" message signifies that the trajectory execution node has finished
-        # executing the trajectory it was assigned. Once this happens, we should go back
-        # to the planning state, and from there if there's nothing in the queue the state
-        # will change to waiting.
-
-        if msg.data == "ee_force_exceeded":
-            pass
-
     async def moveit_mp_callback(self, request, response):
-        self.state = State.MAKE_BOARD
+        """
+        Queue a pose to be planned with the MoveIT motion planner.
+
+        Queue a pose to be planned using the MoveIT motion planner,
+        and specify whether or not that pose should be executed with
+        force control.
+
+        Args:
+        ----
+        request (MovePose.Request): Target pose for the MoveIT motion
+        planner to plan to, and whether or not the trajectory should
+        be executed with force control or not.
+
+        Returns:
+        -------
+        response: None
+
+        """
+
         await self.board_future
 
-        self.get_logger().info(f"MOVEIT MOTION PLAN REQUEST RECEIVED")
+        self.get_logger().info("MOVEIT MOTION PLAN REQUEST RECEIVED")
 
         self.plan_future = Future()
         self.execute_future = Future()
@@ -297,7 +346,6 @@ class Drawing(Node):
         self.execute_future = Future()
         self.state = State.REMOVE_BOARD
         await self.board_future
-        # self.draw_obs(pos=board_pose, name="board", size=[0.0, 0.0, -1.0])
 
         return response
 
@@ -314,13 +362,18 @@ class Drawing(Node):
 
         Args:
         ----
-        msg: the custom message (brain_interfaces/Cartesian.msg)
+        request (Pose[]): List of poses to be computed by the
+        /compute_cartesian_path service, the velocity of the cartesian
+        trajectory, whether the cartesian request is a replan request or not,
+        and whether or not the cartesian path should be executed with force
+        control or not.
+
+        Returns:
+        -------
+        response: None
         '''
+        self.get_logger().info("CARTESIAN MOTION PLAN REQUEST RECEIVED")
 
-        self.get_logger().info(f"CARTESIAN MOTION PLAN REQUEST RECEIVED")
-
-        # self.letter_start_point.y = request.start_point.y
-        # self.letter_start_point.z = request.start_point.z
         self.plan_future = Future()
         self.execute_future = Future()
 
@@ -340,68 +393,58 @@ class Drawing(Node):
         return response
 
     async def replan_callback(self, request, response):
-        self.get_logger().info(f"REPLAN REQUEST RECEIVED")
+        """
+        Replan a trajectory.
+
+        Replans a trajectory that previously exceeded the force
+        threshold when being executed.
+
+        Args:
+        ----
+        request (Pose): A pose to be replanned.
+
+        Returns:
+        -------
+        response (JointTrajectory[]): A list of joint trajectories
+        to be executed.
+
+        """
+        self.get_logger().info("REPLAN REQUEST RECEIVED")
 
         self.get_logger().info(f"request.pose: {request.pose}")
 
         self.cartesian_mp_queue.insert(0, request.pose)
         self.cartesian_velocity.insert(0, 0.015)
 
-        await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
+        await self.path_planner.plan_cartesian_path(
+            [self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
 
-        response.joint_trajectories = self.path_planner.execute_individual_trajectories()
+        response.joint_trajectories = self.path_planner.\
+            execute_individual_trajectories()
 
         self.cartesian_mp_queue.pop(0)
         self.cartesian_velocity.pop(0)
 
         return response
 
-    def jointstate_mp_callback(self, request, response):
-        '''
-        Queue a JointState to be planned for.
+    def draw_obs(self, name, pos, size):
+        """
+        Draw an obstacle.
 
-        When the jointstate_mp service is called, we set the goal_joint_state 
-        to the joint_state from the service call directly, instead of
-        using a Pose() message with the compute_ik service like the moveit 
-        motion planner. Once this JointState is planned for, it will be 
-        immediately executed.
+        Draw an obstacle so that motion planners do not plan
+        paths that would intersect with the obstacle.
 
         Args:
         ----
-        request: A JointState() message we want to plan a path to.
-        response: An empty message.
-        '''
+        name (string): The obstacle's id.
+        pos (Pose): The pose at which the obstacle will be drawn.
+        size (list): The size of the obstacle.
 
-        self.get_logger().info(f"JOINTSTATE MOTION PLAN REQUEST RECEIVED")
+        Returns:
+        -------
+        None
 
-        joints_to_move = list(
-            zip(request.joint_names, request.joint_positions))
-        # N = len(joints_to_move)
-        self.path_planner.goal_joint_state = self.path_planner.current_joint_state
-        self.path_planner.goal_joint_state.effort = []  # haha!!
-        self.path_planner.goal_joint_state.header.stamp.nanosec = 0
-        self.path_planner.goal_joint_state.header.stamp.sec = 0
-        self.path_planner.goal_joint_state.header.frame_id = 'panda_link0'
-
-        # while joints_to_move:
-        for i in range(len(self.path_planner.goal_joint_state.name)-2):
-            # self.get_logger().info(f'{ self.path_planner.goal_joint_state.name[i]} 1')ointTrajectory(head
-            # self.get_logger().info(f'{joints_to_move[0]} 2')
-            if len(joints_to_move) > 0:
-                if joints_to_move[0][0] == self.path_planner.goal_joint_state.name[i]:
-                    self.path_planner.goal_joint_state.position[i] = joints_to_move[0][1]
-                    joints_to_move.pop(0)
-
-        self.get_logger().info(
-            f"goal_jiont_staet: {self.path_planner.goal_joint_state}")
-
-        self.path_planner.plan_path()
-
-        self.state = State.WAITING
-
-        return response
-
-    def draw_obs(self, name, pos, size):
+        """
         box_id = name
         frame_id = 'panda_link0'
         dimensions = size  # size
@@ -412,7 +455,8 @@ class Drawing(Node):
 
     def get_transform(self, parent_frame, child_frame):
         """
-        Try catch block for listening to transforms between parent and child frame.
+        Try catch block for listening to transforms between parent and child
+        frame.
 
         Args:
         ----
@@ -433,7 +477,6 @@ class Drawing(Node):
             brick_to_platform = np.array([transl.x, transl.y, transl.z])
             rotation = np.array([rot.x, rot.y, rot.z, rot.w])
 
-            # print(brick_to_platform[2])
             return brick_to_platform, rotation
 
         except tf2_ros.LookupException as e:
@@ -450,6 +493,7 @@ class Drawing(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     def execute_done_callback(self, future):
+        """Callback for when a move is done executing."""
 
         if not self.cartesian_mp_queue:
             self.get_logger().info("plan has been executed")
@@ -458,20 +502,22 @@ class Drawing(Node):
             self.get_logger().info("cartesian move was executed")
             self.state = State.PLAN_CARTESIAN_MOVE
             self.execute_future = Future()
-        # self.plan_future.set_result("done")
 
     async def timer_callback(self):
         """
         Timer loop for the drawing node.
 
         The timer loop functions as the main loop of the node, and
-        also contains a state machine. If the gripper server is
-        available, the state machine will contain actions for the
-        gripper. If it is not available, as is the case when using
-        fake hardware, the gripper will not be used.
+        also contains a state machine. It performs actions for force
+        control, regulates when trajectories are planned, which motion
+        planner is used, and send trajectories off to be executed.
 
         Args:
         ----
+        None
+
+        Returns:
+        -------
         None
 
         """
@@ -490,11 +536,13 @@ class Drawing(Node):
                 return
 
             self.get_logger().info("here")
-            await self.path_planner.get_goal_joint_states(self.moveit_mp_queue[0])
+            await self.path_planner.get_goal_joint_states(
+                self.moveit_mp_queue[0])
             self.get_logger().info("here")
             self.joint_trajectories = ExecuteJointTrajectories.Request()
             self.joint_trajectories.current_pose = self.moveit_mp_queue[0]
-            self.joint_trajectories.use_force_control = self.use_force_control[0]
+            self.joint_trajectories.use_force_control = \
+                self.use_force_control[0]
 
             self.path_planner.plan_path()
 
@@ -515,15 +563,18 @@ class Drawing(Node):
 
             self.get_logger().info(f"velocity: {self.cartesian_velocity[0]}")
 
-            await self.path_planner.plan_cartesian_path([self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
+            await self.path_planner.plan_cartesian_path(
+                [self.cartesian_mp_queue[0]], self.cartesian_velocity[0])
             self.joint_trajectories = ExecuteJointTrajectories.Request()
-            # queue the remaining poses, so that if force threshold is exceeded,
-            # send_trajectories can initiate a replan request directly with the
-            # april tags node... trust me.
+            # queue the remaining poses, so that if force threshold is
+            # exceeded, send_trajectories can initiate a replan request
+            # self.plan_future.set_result("done") directly with the april tags
+            # node.
 
             self.joint_trajectories.current_pose = self.cartesian_mp_queue[0]
             self.joint_trajectories.replan = self.replan
-            self.joint_trajectories.use_force_control = self.use_force_control[0]
+            self.joint_trajectories.use_force_control =\
+                self.use_force_control[0]
             self.get_logger().info(
                 f"cartesian queue: {self.cartesian_mp_queue}")
 
@@ -538,11 +589,13 @@ class Drawing(Node):
 
         elif self.state == State.EXECUTING:
 
-            # send the trajectory previously planned, either by the moveit motion
-            # planner or the cartesian path planner, to our node for executing trajectories.
+            # send the trajectory previously planned, either by the moveit
+            # motion planner or the cartesian path planner, to our node for
+            # executing trajectories.
 
             self.joint_trajectories.state = "publish"
-            self.joint_trajectories.joint_trajectories = self.path_planner.execute_individual_trajectories()
+            self.joint_trajectories.joint_trajectories = \
+                self.path_planner.execute_individual_trajectories()
 
             self.execute_future = self.joint_trajectories_client.call_async(
                 self.joint_trajectories)
@@ -552,21 +605,19 @@ class Drawing(Node):
 
         elif self.state == State.WAITING:
 
-            # calculate the current force at the end-effector, and send it to the
-            # node that is executing our trajectory. Also, check to see whether
-            # the moveit motion planner has completed planning. This will only
-            # happen if the state prior was State.PLAN_MOVEGROUP.
+            # calculate the current force at the end-effector, and send it to
+            # the node that is executing our trajectory. Also, check to see
+            # whether the moveit motion planner has completed planning. This
+            # will only happen if the state prior was State.PLAN_MOVEGROUP.
 
             while not self.path_planner.current_joint_state.effort:
                 return
 
             joint_torque_offset = self.calc_joint_torque_offset()
 
-            # self.get_logger().info(
-            #     f"joint torque offset: {joint_torque_offset}")
-
             self.ee_force.append(self.calc_ee_force(
-                self.path_planner.current_joint_state.effort[5] - joint_torque_offset)[2])
+                self.path_planner.current_joint_state.effort[5] -
+                joint_torque_offset)[2])
             self.ee_force.pop(0)
 
             if self.i % 10:  # publish the message at a frequency of 100hz
@@ -576,10 +627,12 @@ class Drawing(Node):
                 ee_force_msg.ee_force = ee_force_avg
                 self.force_pub.publish(ee_force_msg)
 
-            if self.path_planner.movegroup_status == GoalStatus.STATUS_SUCCEEDED:
+            if self.path_planner.movegroup_status ==\
+                    GoalStatus.STATUS_SUCCEEDED:
 
                 self.state = State.EXECUTING
                 self.path_planner.movegroup_status = GoalStatus.STATUS_UNKNOWN
+
         elif self.state == State.MAKE_BOARD:
             ansT, ansR = self.get_transform("panda_link0", "board")
             board_pose = Pose()
@@ -593,7 +646,7 @@ class Drawing(Node):
             board_pose = Pose()
             board_pose.position.z = -0.3
             self.draw_obs(pos=board_pose, name="board", size=[0.0, 0.0, 0.0])
-            self.board_future.set_result("fdsa")
+            self.board_future.set_result("remove")
 
         self.i += 1
 
