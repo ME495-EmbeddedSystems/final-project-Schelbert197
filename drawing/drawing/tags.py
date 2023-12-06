@@ -26,6 +26,7 @@ import modern_robotics as mr
 import numpy as np
 import time
 
+
 class State(Enum):
     """
     Declaring diffrent states the robot or brick can be in.
@@ -270,7 +271,7 @@ class Tags(Node):
             output_pose: updated list of poses
 
         """
-        
+
         ansT, ansR = self.get_transform("board", "panda_hand_tcp")
 
         # positive z is out of the board

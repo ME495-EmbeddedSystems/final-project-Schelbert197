@@ -6,7 +6,8 @@ subsequently send them to another node to be executed. Additionally,
 calculate the estimated force at the end-effector, and publish it
 on a topic.
 
-PARAMETERS:
+Parameters
+----------
   + use_fake_hardware (bool) - Determines whether or not trajectories will
   be executed on the real robot or only in rviz.
   + robot_name (string) - the name of the robot.
@@ -74,11 +75,11 @@ class Drawing(Node):
     Drive a robot around to pickup objects that are a user specified
     distance within its workspace.
 
-    Args:
+    Args
     ----
     None
 
-    Returns:
+    Returns
     -------
     None
 
@@ -196,15 +197,16 @@ class Drawing(Node):
         Calculate the transformation and rotation matrices using
         a 3x1 translation vector and a quaternion.
 
-        Args:
+        Args
         ----
         translation (numpy array): A 3x1 translation vector.
         quaternion (numpy array): A 4x1 quaternion.
 
-        Returns:
+        Returns
         -------
         transform_matrix (numpy array): A transformation matrix.
         rotation_matrix (nuumpy array): A rotation matrix.
+
         """
         # Normalize the quaternion
         quaternion /= np.linalg.norm(quaternion)
@@ -230,11 +232,11 @@ class Drawing(Node):
         portion of the torque in panda_joint6 that is due to
         the gripper itself and the current time.
 
-        Args:
+        Args
         ----
         None
 
-        Returns:
+        Returns
         -------
         joint_torque_offset (float): The amount of torque in panda_joint6
         that is due to the mass of the end-effector and its attachments.
@@ -275,11 +277,11 @@ class Drawing(Node):
         Calculate the force at the end-effector in the xyz directions
         in the frame of the end-effector.
 
-        Args:
+        Args
         ----
         effort_joint6 (float): The effort in panda_joint6 in Nm.
 
-        Returns:
+        Returns
         -------
         Fe (float): force at the end effector.
 
@@ -315,18 +317,17 @@ class Drawing(Node):
         and specify whether or not that pose should be executed with
         force control.
 
-        Args:
+        Args
         ----
         request (MovePose.Request): Target pose for the MoveIT motion
         planner to plan to, and whether or not the trajectory should
         be executed with force control or not.
 
-        Returns:
+        Returns
         -------
         response: None
 
         """
-
         await self.board_future
 
         self.get_logger().info("MOVEIT MOTION PLAN REQUEST RECEIVED")
@@ -350,7 +351,7 @@ class Drawing(Node):
         return response
 
     async def cartesian_mp_callback(self, request, response):
-        '''
+        """
         Queue a letter to be drawn.
 
         This function will be called when the brain node sends
@@ -360,7 +361,7 @@ class Drawing(Node):
         this node could add in some in-between movements that help guide
         the robot to the correct position on the board. We can discuss this.
 
-        Args:
+        Args
         ----
         request (Pose[]): List of poses to be computed by the
         /compute_cartesian_path service, the velocity of the cartesian
@@ -368,10 +369,11 @@ class Drawing(Node):
         and whether or not the cartesian path should be executed with force
         control or not.
 
-        Returns:
+        Returns
         -------
         response: None
-        '''
+
+        """
         self.get_logger().info("CARTESIAN MOTION PLAN REQUEST RECEIVED")
 
         self.plan_future = Future()
@@ -399,11 +401,11 @@ class Drawing(Node):
         Replans a trajectory that previously exceeded the force
         threshold when being executed.
 
-        Args:
+        Args
         ----
         request (Pose): A pose to be replanned.
 
-        Returns:
+        Returns
         -------
         response (JointTrajectory[]): A list of joint trajectories
         to be executed.
@@ -434,13 +436,13 @@ class Drawing(Node):
         Draw an obstacle so that motion planners do not plan
         paths that would intersect with the obstacle.
 
-        Args:
+        Args
         ----
         name (string): The obstacle's id.
         pos (Pose): The pose at which the obstacle will be drawn.
         size (list): The size of the obstacle.
 
-        Returns:
+        Returns
         -------
         None
 
@@ -455,10 +457,9 @@ class Drawing(Node):
 
     def get_transform(self, parent_frame, child_frame):
         """
-        Try catch block for listening to transforms between parent and child
-        frame.
+        Listen to transforms between parent and child frame.
 
-        Args:
+        Args
         ----
         parent_frame (string): name of parent frame
         child_frame (string): name of child frame
@@ -493,8 +494,7 @@ class Drawing(Node):
             return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]
 
     def execute_done_callback(self, future):
-        """Callback for when a move is done executing."""
-
+        """Perform actions when a move is done executing."""
         if not self.cartesian_mp_queue:
             self.get_logger().info("plan has been executed")
             self.plan_future.set_result("done")
@@ -512,16 +512,15 @@ class Drawing(Node):
         control, regulates when trajectories are planned, which motion
         planner is used, and send trajectories off to be executed.
 
-        Args:
+        Args
         ----
         None
 
-        Returns:
+        Returns
         -------
         None
 
         """
-
         if self.state == State.PLAN_MOVEGROUP:
 
             # here we check to see if the big_move queue is empty, and if not,
