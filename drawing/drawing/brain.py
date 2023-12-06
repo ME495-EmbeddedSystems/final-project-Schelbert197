@@ -1,19 +1,21 @@
 """
-Plays the hangman game based on the OCR user input.
+The brain node.
 
-Interfaces with the brain node and the OCR node to evaulate data.
+Interfaces with all other nodes to evaulate data.
 PUBLISHERS:
-  + /writer (LetterMsg) - The data sent to brain for a given play.
-SERVICES:
-    none
-PARAMETERS:
-    none
+  + /ocr_run (Bool) - The message to initiate the OCR pipeline.
+SUBSCRIBERS:
+  + /writer (LetterMsg) - The data sent from hangman for a given play.
+CLIENTS:
+  + /where_to_write (BoardTiles) - The data sent to retrieve a tile pose.
+  + /moveit_mp (MovePose) - The data to move to specific pose.
+  + /cartesian_mp (Cartesian) - The data sent for a cartesian move.
+  + /kickstart_service (Empty) - The data sent to initialize the board.
 """
 
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
-
 from std_srvs.srv import Empty
 from std_msgs.msg import Bool
 from matplotlib.font_manager import FontProperties
@@ -27,12 +29,19 @@ import numpy as np
 
 
 class State(Enum):
+    """
+    The state class.
+
+    Create the states of the node to determine what the timer
+    fcn should be doing (PLAYING, WAITING, OR GAME_OVER).
+    """
     INITIALIZE = auto(),
     WAITING = auto(),
     LETTER = auto()
 
 
 class Brain(Node):
+    """Controls the nodes required to play Hang,man."""
 
     def __init__(self):
         super().__init__("brain")
@@ -41,10 +50,7 @@ class Brain(Node):
 
         self.create_timer(0.01, self.timer_callback, self.timer_callback_group)
 
-        # create publishers
-        self.moveit_mp_pub = self.create_publisher(
-            Pose, '/moveit_mp', 10)
-
+        # Create publlishers
         self.ocr_pub = self.create_publisher(
             Bool, '/ocr_run', 10)
 

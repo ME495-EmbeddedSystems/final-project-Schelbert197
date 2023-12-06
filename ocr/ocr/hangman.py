@@ -1,13 +1,13 @@
 """
+The Hangman Node
+
 Plays the hangman game based on the OCR user input.
 
 Interfaces with the brain node and the OCR node to evaulate data.
 PUBLISHERS:
   + /writer (LetterMsg) - The data sent to brain for a given play.
-SERVICES:
-    none
-PARAMETERS:
-    none
+SUBSCRIBERS:
+  + /user_input (String) - The guess sent from OCR for given play.
 """
 
 from enum import Enum, auto
@@ -20,15 +20,19 @@ from random import randint
 
 
 class State(Enum):
-    """Create the states of the node to determine what the timer
-    fcn should be doing (PLAYING, WAITING, OR GAME_OVER)"""
+    """
+    The State class.
+
+    Create the states of the node to determine what the timer
+    fcn should be doing (PLAYING, WAITING, OR GAME_OVER).
+    """
     PLAYING = auto(),
     GAME_OVER = auto(),
     WAITING = auto()
 
 
 class Hangman(Node):
-    """Plays the game hangman with user input"""
+    """Plays the game hangman with user input."""
 
     def __init__(self):
         super().__init__("hangman")
